@@ -9,31 +9,6 @@ In applying this licence, CERN does not waive the privileges and immunities gran
 Author: Joshua Dawes - CERN, University of Manchester - joshua.dawes@cern.ch
 """
 
-"""
-
-Let F = (a and b) or c.
-
-We construct a syntax tree of the formula, and a mapping from atoms to the closest parent sub-formula in which they are found:
-
-a -> {(a and b)},
-b -> {(a and b)},
-c -> {(a and b) or c}
-
-When an input is received for an atom, we find the vertices in the syntax tree that correspond to these sub-formulas.
-For example, let's say we observe a.
-
-Then we find that a is contained in (a and b), so set a to T in this sub-formula.
-We then know that, for conjunctions, all clauses must be true.  So this vertex is left alone, a being replaced by T.
-
-We then observe c (this is where the old algorithm would fail).
-c is mapped to ((a and b) or c), so we update c to T in this sub-formula.
-We then know that, for disjunction, at least one clause must be true, which it is (c = T).
-Hence, this vertex is collapsed to T (corresponding to a sub-formula evaluating to T).
-
-This is the root vertex, so the whole formula is T.
-
-"""
-
 import datetime
 
 
@@ -526,8 +501,6 @@ class Checker(object):
 			else:
 				self.atom_to_occurrence_map[formula] = [formula]
 
-		#print("")
-
 	def __repr__(self):
 		return "Monitor state for formula %s is %s" % (self._original_formula, str(self._formula))
 
@@ -539,7 +512,6 @@ class Checker(object):
 		# record the observation and path
 		if not(self.atom_to_observation.get(atom_index)):
 			self.atom_to_observation[atom_index] = (value, inst_point_id)
-		#if not(self.atom_to_program_path.get(atom_index)):
 		# we always overwrite this
 		self.atom_to_program_path[atom_index] = [v for v in program_path]
 		
@@ -551,7 +523,6 @@ class Checker(object):
 			else:
 				result = self.check_optimised(lnot(atom), force_monitor_update=force_monitor_update)
 		elif type(atom) is TransitionDurationInInterval:
-			# just do seconds for now...
 			time_taken = value.total_seconds()
 			print("processing time taken %s wrt interval %s" % (time_taken, atom._interval))
 			if atom.check(time_taken):

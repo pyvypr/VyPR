@@ -63,13 +63,11 @@ def consumption_thread_function(verification_obj):
 	# the web service has to be considered as running forever, so the monitoring loop for now should also run forever
 	# this needs to be changed for a clean exit
 	while True:
-		#print("consumption thread has queue %s" % verification_obj)
 
 		# take top element from the queue
 		try:
 			top_pair = verification_obj.consumption_queue.get(timeout=1)
 		except:
-			#print("queue empty - not attempting consumption")
 			continue
 
 		print("="*100)
@@ -128,21 +126,13 @@ def consumption_thread_function(verification_obj):
 					for bind_var in binding:
 
 						if type(bind_var) is CFGVertex:
-							"""print("state change resulting from assignment to %s : line %i" %\
-								(bind_var._previous_edge._instruction.targets[0].id, bind_var._previous_edge._instruction.lineno))"""
 							binding_to_line_numbers[bind_space_index].append(bind_var._previous_edge._instruction.lineno)
 						elif type(bind_var) is CFGEdge:
-							"""print("edge corresponding to call to %s : line %i" %\
-								(bind_var._instruction.value.func.id, bind_var._instruction.lineno))"""
 							binding_to_line_numbers[bind_space_index].append(bind_var._instruction.lineno)
 
 					print("]")
 
 					print("gave verdicts %s" % (", ".join(map(str, report_map[bind_space_index]))))
-
-					#print("for grouping variable value %s" % (top_pair[3]))
-
-					#print("")
 
 				# send the verdict
 				# we send the function name, the time of the function call, the verdict report object,
@@ -206,14 +196,7 @@ def consumption_thread_function(verification_obj):
 		instrumentation_set_index = top_pair[5]
 		observed_value = top_pair[6]# this may be redundant now
 		print("observed value", observed_value)
-		#instrumentation_atom = atoms[top_pair[6]]
 		associated_atom = atoms[atom_index]
-		"""try:
-			slice_values = top_pair[9]
-			print("slice values for observation for atom %s are %s with observed value %s" % (associated_atom, slice_values, str(observed_value)))
-		except:
-			slice_values = None
-			print("no slice values for observation with atom %s" % associated_atom)"""
 
 		instrumentation_point_db_id = top_pair[-2]
 		global_atom_index = top_pair[-1]
@@ -258,7 +241,6 @@ def consumption_thread_function(verification_obj):
 
 		if branch_minimal:
 
-			#print("%s is branch minimal" % str(top_pair))
 			print("branch minimal")
 
 			# branch minimal, so if the bind variable is the first,
@@ -294,7 +276,6 @@ def consumption_thread_function(verification_obj):
 					print("registering verdict")
 
 					verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, associated_atom, atom_to_program_path_map, global_atom_index)
-					#send_verdict_report(function_name, maps.latest_time_of_call, verdict_report, binding_to_line_numbers, top_pair[4], top_pair[5])
 				else:
 					pass
 			else:
@@ -526,7 +507,6 @@ def consumption_thread_function(verification_obj):
 					if monitors[n] is None:
 						continue
 
-					#print("updating monitor for static qd index %i" % static_qd_index)
 					sub_verdict = monitors[n].process_atom_and_value(instrumentation_atom, observed_value, global_atom_index,
 						inst_point_id=instrumentation_point_db_id, program_path=program_path)
 					if sub_verdict == True or sub_verdict == False:
