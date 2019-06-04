@@ -47,18 +47,15 @@ class Forall(object):
 	a sequence of quantifiers.
 	This class should always hold the current quantification structure.
 	"""
-	def __init__(self, bind_variable, is_first=True, bind_variables=None):
+	def __init__(self, is_first=True, bind_variables=None, **bind_variable):
 		"""
 		Given a bind variable (bind_variable_name is the variable name,
 		and bind_variable_value is either StaticState or StaticTransition),
 		check that, if is_first is true, the bind variable is independent.
 		"""
 
-		if is_first and not(bind_variable._required_binding is None):
-			raise Exception("First bind variable in list must be independent.")
-
-		if not(is_first) and bind_variable._required_binding is None:
-			raise Exception("Only the first bind variable can be independent.")
+		bind_variable_name = bind_variable.keys()[0]
+		bind_variable_obj = bind_variable.values()[0]
 
 		self.bind_variables = bind_variables
 
@@ -68,12 +65,13 @@ class Forall(object):
 		to reference the actual bind variable value in the bind_variables dictionary
 		"""
 		if not(is_first):
-			bind_variable._required_binding = self.bind_variables[bind_variable._required_binding]
+			bind_variable_obj._required_binding = self.bind_variables[bind_variable_obj._required_binding]
 
+		bind_variable_final = bind_variable_obj.complete_instantiation(bind_variable_name)
 		if self.bind_variables is None:
-			self.bind_variables = OrderedDict({bind_variable._bind_variable_name : bind_variable})
+			self.bind_variables = OrderedDict({bind_variable_name : bind_variable_final})
 		else:
-			self.bind_variables.update({bind_variable._bind_variable_name : bind_variable})
+			self.bind_variables.update({bind_variable_name : bind_variable_final})
 
 		self._bind_variables = self.bind_variables.values()
 
@@ -86,12 +84,16 @@ class Forall(object):
 		else:
 			return "Forall(%s).Formula(%s)" % (self.bind_variables, self.get_formula_instance())
 
-	def Forall(self, bind_variable):
+	def Forall(self, **bind_variable):
 		# return an instance 
-		return Forall(bind_variable, is_first=False, bind_variables=self.bind_variables)
+		return Forall(is_first=False, bind_variables=self.bind_variables, **bind_variable)
 
 	def get(self, key):
 		return self.bind_variables[key]
+
+	# syntactic sugar
+	def Check(self, formula_lambda):
+		return self.Formula(formula_lambda)
 
 	def Formula(self, formula_lambda):
 		"""
@@ -111,6 +113,31 @@ class Forall(object):
 		argument_names = inspect.getargspec(self._formula).args
 		bind_variables = map(lambda arg_name : self.bind_variables[arg_name], argument_names)
 		return self._formula(*bind_variables)
+
+class changes(object):
+	"""
+	Syntactic sugar for specifications.
+	"""
+
+	def __init__(self, name_changed, after=None):
+		self._name = None
+		self._name_changed = name_changed
+		self._required_binding = after
+
+	def complete_instantiation(self, bind_variable_name):
+		return StaticState(bind_variable_name, self._name_changed, self._required_binding)
+
+class calls(object):
+	"""
+	Syntactic sugar for specifications.
+	"""
+
+	def __init__(self, operates_on, after=None):
+		self._operates_on = operates_on
+		self._required_binding = after
+
+	def complete_instantiation(self, bind_variable_name):
+		return StaticTransition(bind_variable_name, self._operates_on, self._required_binding)
 
 class StaticState(object):
 	"""
