@@ -13,8 +13,8 @@ from pprint import pprint
 import datetime
 import requests
 import json
+
 sys.path.append("VyPR/")
-#sys.path.append("/afs/cern.ch/user/j/jdawes/pmp/vypr/")
 
 from monitor_synthesis import formula_tree
 from monitor_synthesis.formula_tree import lnot
