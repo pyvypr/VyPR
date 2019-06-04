@@ -22,22 +22,15 @@ import inspect
 import json
 import argparse
 
-# for testing, just add the verification sub directory to the python path for ow
-# note that in the long term this is not a good approach -
-# I'm using it for now to get the verification code...
-
-#sys.path.append("../common/wVyPR/")
-#from wVyPR import *
-
 # get the formula building functions before we evaluate the configuration code
 from formula_building.formula_building import *
 from monitor_synthesis.formula_tree import lnot
 from control_flow_graph.construction import *
-#import verification
 
 VERDICT_SERVER_URL = None
 VERBOSE = False
 EXPLANATION = False
+DRAW_GRAPHS = False
 
 def print(*s):
 	global VERBOSE
@@ -87,19 +80,18 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
 		# then iterate over it and recurse into the list of quantifiers for each element
 		if type(quantifier_sequence._bind_variables[0]) is StaticState:
 			variable_changed = quantifier_sequence._bind_variables[0]._name_changed
-			qd = filter(lambda symbolic_state : symbolic_state._name_changed == variable_changed or variable_changed in symbolic_state._name_changed, scfg.vertices)
+			qd = filter(lambda symbolic_state : symbolic_state._name_changed == variable_changed\
+				or variable_changed in symbolic_state._name_changed, scfg.vertices)
 		elif type(quantifier_sequence._bind_variables[0]) is StaticTransition:
 			variable_operated_on = quantifier_sequence._bind_variables[0]._operates_on
 			relevant_target_vertices = filter(
-				lambda symbolic_state : symbolic_state._name_changed == variable_operated_on or variable_operated_on in symbolic_state._name_changed,
+				lambda symbolic_state : symbolic_state._name_changed == variable_operated_on\
+					or variable_operated_on in symbolic_state._name_changed,
 				scfg.vertices
 			)
 			qd = map(lambda symbolic_state : symbolic_state._previous_edge, relevant_target_vertices)
 
 		print("computed independent qd: %s" % qd)
-		# for now don't handle transitions
-		"""elif type(quantifier_sequence._bind_variables[0]) is StaticTransition:
-			operated_on = quantifier_sequence._bind_variables[0]._operates_on"""
 		binding_space = []
 		# recurse with (possibly partial) bindings
 		for element in qd:
@@ -124,7 +116,8 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
 			# only works for vertex inputs
 			# this has to cater for edges that are both assignments and function calls (assignments of function call return values)
 			qd = filter(lambda edge : hasattr(edge, "_operates_on") and \
-				(edge._operates_on == next_quantifier._operates_on or next_quantifier._operates_on in edge._operates_on), reachability_map[current_binding_value])
+				(edge._operates_on == next_quantifier._operates_on or\
+					next_quantifier._operates_on in edge._operates_on), reachability_map[current_binding_value])
 
 			# compute the bindings from this new qd
 			binding_space = []
@@ -183,27 +176,24 @@ def write_scfg_to_file(scfg, file_name):
 	"""
 	Given an scfg and a file name, write the scfg in dot format to the file.
 	"""
-	graph = Digraph()
-	graph.attr("graph", splines="true", fontsize="10")
-	shape = "rectangle"
-	for vertex in scfg.vertices:
-		graph.node(str(id(vertex)), str(vertex._name_changed), shape=shape)
-		for edge in vertex.edges:
-			"""graph.edge(
-				str(id(vertex)),
-				str(id(edge._target_state)),
-				"%s : %s\n%s" % (str(edge._condition), str(edge._operates_on), str(edge._target_state._path_length))
-			)"""
-			graph.edge(
-				str(id(vertex)),
-				str(id(edge._target_state)),
-				"%s - %s - path length = %s" %\
-					(str(edge._operates_on) if not(type(edge._operates_on[0]) is ast.Print) else "print stmt",
-					edge._condition,
-					str(edge._target_state._path_length))
-			)
-	graph.render(file_name)
-	print("Writing SCFG to file '%s'." % file_name)
+	if DRAW_GRAPHS:
+		graph = Digraph()
+		graph.attr("graph", splines="true", fontsize="10")
+		shape = "rectangle"
+		for vertex in scfg.vertices:
+			graph.node(str(id(vertex)), str(vertex._name_changed), shape=shape)
+			for edge in vertex.edges:
+				graph.edge(
+					str(id(vertex)),
+					str(id(edge._target_state)),
+					"%s - %s - path length = %s" %\
+						(str(edge._operates_on)\
+							if not(type(edge._operates_on[0]) is ast.Print) else "print stmt",
+						edge._condition,
+						str(edge._target_state._path_length))
+				)
+		graph.render(file_name)
+		print("Writing SCFG to file '%s'." % file_name)
 
 def post_to_verdict_server(url, data):
 	"""
@@ -225,14 +215,19 @@ def read_configuration(file):
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser(description='Instrumentation for VyPR.')
-	parser.add_argument('--verbose', action='store_true', help='If given, output will be turned on for the instrumentation module.', required=False)
+	parser.add_argument('--verbose', action='store_true',
+		help='If given, output will be turned on for the instrumentation module.', required=False)
+	parser.add_argument('--draw-graphs', action='store_true',
+		help='If given, SCFGs derived from functions to be monitored will be written to GV files and compiled into PDFs.', required=False)
 
 	args = parser.parse_args()
 
 	VERBOSE = args.verbose
+	DRAW_GRAPHS = args.draw_graphs
 
 	inst_configuration = read_configuration("vypr.config")
-	VERDICT_SERVER_URL = inst_configuration.get("verdict_server_url") if inst_configuration.get("verdict_server_url") else "http://localhost:9001/"
+	VERDICT_SERVER_URL = inst_configuration.get("verdict_server_url")\
+		if inst_configuration.get("verdict_server_url") else "http://localhost:9001/"
 	EXPLANATION = inst_configuration.get("explanation") == "on"
 
 	# reset code to non-instrumented
@@ -248,7 +243,8 @@ if __name__ == "__main__":
 					print("reset file %s to uninstrumented version" % f)
 
 	# load in verification config file
-	verification_conf_file = inst_configuration.get("specification_file") if inst_configuration.get("specification_file") else "verification_conf.py"
+	verification_conf_file = inst_configuration.get("specification_file")\
+		if inst_configuration.get("specification_file") else "verification_conf.py"
 	verif_config_contents = "".join(open(verification_conf_file, "r").readlines())
 
 	# execute contents so we have the configuration variable in the local scope
@@ -560,8 +556,6 @@ if __name__ == "__main__":
 											(verification_instruction, formula_hash, instrument_function_qualifier, m, bind_variable_index,
 												atom_index, n, atoms.index(atom), point._instruction.lineno, map(pickle.dumps, point._condition),
 												point._target_state._path_length, instrumentation_point_db_id, global_atom_index)
-										#split_statement = "flask.g.usage.log(\"before instrument inserts into queue\")"
-										#time_difference_statement = "__duration = __timer_e - __timer_s; print(__duration);"
 
 										print("Argument specification:")
 										print(
@@ -574,7 +568,6 @@ if __name__ == "__main__":
 										end_ast = ast.parse(timer_end_statement).body[0]
 										difference_ast = ast.parse(time_difference_statement).body[0]
 										queue_ast = ast.parse(time_difference_statement).body[1]
-										#split_ast = ast.parse(split_statement).body[0]
 
 										start_ast.lineno = point._instruction.lineno
 										start_ast.col_offset = point._instruction.col_offset
@@ -584,8 +577,6 @@ if __name__ == "__main__":
 										difference_ast.col_offset = point._instruction.col_offset
 										queue_ast.lineno = point._instruction.lineno
 										queue_ast.col_offset = point._instruction.col_offset
-										#split_ast.col_offset = point._instruction.col_offset
-										#split_ast.lineno = point._instruction.lineno
                                                                                 
 
 										index_in_block = point._instruction._parent_body.index(point._instruction)
@@ -617,8 +608,6 @@ if __name__ == "__main__":
 											(state_variable_alias, atom._name, verification_instruction, formula_hash, instrument_function_qualifier, m,
 												bind_variable_index, atom_index, n, atom._name, state_variable_alias, atoms.index(atom),
 												incident_edge._instruction.lineno, instrumentation_point_db_id, global_atom_index)
-										"""record_state = "record_state_%s = %s; print(record_state_%s);" %\
-											(atom._name, atom._name, atom._name)"""
 
 										record_state_ast = ast.parse(record_state).body[0]
 										queue_ast = ast.parse(record_state).body[1]
@@ -651,7 +640,6 @@ if __name__ == "__main__":
 								}
 							else:
 								print("Placing branch recording instrument for try-catch with first instruction %s in block" % vertex_information[1])
-								#instrument_code = "print(\"appending path condition %s inside conditional\")" % vertex_information[2]
 								# send branching condition to verdict server, take the ID from the response and use it in the path recording instruments.
 								condition_dict = {
 									"serialised_condition" : vertex_information[2]
@@ -707,7 +695,6 @@ if __name__ == "__main__":
 							print(vertex_information[1]._parent_body)
 						elif vertex_information[0] == 'loop':
 							print("Placing branch recording instrument for loop with first instruction %s in body" % vertex_information[1])
-							#instrument_code_inside_loop = "print(\"appending path condition %s inside loop\")" % vertex_information[2]
 							condition_dict = {
 								"serialised_condition" : pickle.dumps(vertex_information[2])
 							}
@@ -722,7 +709,6 @@ if __name__ == "__main__":
 							instrument_inside_loop_ast.lineno = vertex_information[1].lineno
 							instrument_inside_loop_ast.col_offset = vertex_information[1].col_offset
 
-							#instrument_code_outside_loop = "print(\"appending path condition %s after loop\")" % vertex_information[4]
 							condition_dict = {
 								"serialised_condition" : pickle.dumps(vertex_information[4])
 							}
