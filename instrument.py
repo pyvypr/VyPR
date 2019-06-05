@@ -31,6 +31,7 @@ VERDICT_SERVER_URL = None
 VERBOSE = False
 EXPLANATION = False
 DRAW_GRAPHS = False
+VERIFICATION_HOME_MODULE = None
 
 def print(*s):
 	global VERBOSE
@@ -229,6 +230,8 @@ if __name__ == "__main__":
 	VERDICT_SERVER_URL = inst_configuration.get("verdict_server_url")\
 		if inst_configuration.get("verdict_server_url") else "http://localhost:9001/"
 	EXPLANATION = inst_configuration.get("explanation") == "on"
+	VERIFICATION_HOME_MODULE = inst_configuration.get("verification_home_module")\
+                if inst_configuration.get("verification_home_module") else "app"
 
 	# reset code to non-instrumented
 	for directory in os.walk("."):
@@ -271,8 +274,9 @@ if __name__ == "__main__":
 		code = "".join(open(file_name, "r").readlines())
 		asts = ast.parse(code)
 
+		# THIS MUST BE MADE CONFIGURABLE
 		# add necessary imports for instruments to work
-		import_code = "from app import verification; import flask"
+		import_code = "from %s import verification; import flask" % VERIFICATION_HOME_MODULE
 		import_asts = ast.parse(import_code)
 
 		verification_import = import_asts.body[0]
