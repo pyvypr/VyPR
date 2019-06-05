@@ -259,7 +259,6 @@ if __name__ == "__main__":
 	# for each verified function, find the file in which it is defined
 
 	verification_instruction = "verification.send_event"
-	#verification_instruction = "print"
 
 	for module in verified_modules:
 
@@ -274,7 +273,6 @@ if __name__ == "__main__":
 		code = "".join(open(file_name, "r").readlines())
 		asts = ast.parse(code)
 
-		# THIS MUST BE MADE CONFIGURABLE
 		# add necessary imports for instruments to work
 		import_code = "from %s import verification; import flask" % VERIFICATION_HOME_MODULE
 		import_asts = ast.parse(import_code)
@@ -302,7 +300,6 @@ if __name__ == "__main__":
 			index_to_hash = []
 			
 			qualifier_subsequence = get_qualifier_subsequence(function)
-			#qualifier_string = ".".join(qualifier_subsequence)
 			function_name = function.split(".")
 
 			# find the function definition
@@ -382,10 +379,8 @@ if __name__ == "__main__":
 
 				# using these bindings, we now need to instrument the code
 				# and then store the (bind space index, bind var index, atom index)
-				# -> instrumentation set map in the intermediate relational database
 				# so the instrumentation mappings can be recovered at runtime without recomputation
 
-				potential_free_variables = {}
 				static_qd_to_point_map = {}
 				vertices_to_triple_list = {}
 
@@ -434,9 +429,6 @@ if __name__ == "__main__":
 					element_types = []
 
 					static_qd_to_point_map[m] = {}
-
-					print("setting up potential free variables for binding %i" % m)
-					potential_free_variables[m] = {}
 
 					for atom in atoms:
 
@@ -493,7 +485,6 @@ if __name__ == "__main__":
 					# iterate through the bind variables - for each bind variable, instrument its points.
 
 					for bind_variable_index in static_qd_to_point_map[m].keys():
-						potential_free_variables[m][bind_variable_index] = {}
 						for (atom_index, point_atom_pair) in enumerate(static_qd_to_point_map[m][bind_variable_index]):
 							print("instrumenting for", atom_index, point_atom_pair)
 							points = point_atom_pair[0]
@@ -526,8 +517,6 @@ if __name__ == "__main__":
 							else:
 								global_atom_index = atoms.index(atom)
 
-								potential_free_variables[m][bind_variable_index][atom_index] = []
-
 								for (n, point) in enumerate(points):
 
 									# send the instrumentation point to the verdict server and get its ID in the database
@@ -548,8 +537,6 @@ if __name__ == "__main__":
 
 
 									if type(atom) is formula_tree.TransitionDurationInInterval:
-
-										coordinate_triple = "[%i][%i][%i]" % (m, bind_variable_index, atom_index)
 
 										timer_start_statement = "__timer_s = datetime.datetime.now()"
 										timer_end_statement = "__timer_e = datetime.datetime.now()"
