@@ -13,6 +13,7 @@ from pprint import pprint
 import datetime
 import requests
 import json
+import flask
 
 sys.path.append("VyPR/")
 
@@ -596,6 +597,12 @@ class Verification(object):
 		Sets up the consumption thread for events from instruments.
 		"""
 		print("INSTANTIATING VERIFICATION OBJ")
+
+		# add the request time recording function before every request
+		def set_request_time():
+			import datetime
+			flask.g.request_time = datetime.datetime.now()
+		flask_object.before_request(set_request_time)
 
 		# read configuration file
 		inst_configuration = read_configuration("vypr.config")
