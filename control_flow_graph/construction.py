@@ -261,15 +261,6 @@ class CFG(object):
 				# update current vertices
 				current_vertices = [new_vertex]
 
-				"""if type(entry) is ast.Assign:
-					# if any inherited variables are overwritten, remove them from the inherited list
-					try:
-						if entry.targets[0].id in input_variables_copy:
-							input_variables_copy = [s for s in input_variables_copy if not(s == entry.targets[0].id)]
-					except:
-						print("assignment was non-trivial - leaving processing")
-						traceback.print_exc()"""
-
 			if type(entry) is ast.Pass:
 				path_length += 1
 				entry._parent_body = block
