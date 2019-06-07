@@ -163,7 +163,10 @@ class CFGEdge(object):
 	"""
 
 	def __init__(self, condition, instruction=None, input_variables=[]):
-		self._condition = condition
+		# the condition has to be copied, otherwise later additions to the condition on the same branch
+		# for example, to indicate divergence and convergence of control flow
+		# will also be reflected in conditions earlier in the branch
+		self._condition = [c for c in condition] if type(condition) is list else condition
 		self._instruction = instruction
 		self._source_state = None
 		self._target_state = None
@@ -461,6 +464,7 @@ class CFG(object):
 				#condition_copy = [c for c in condition]
 				#condition_copy.append(disjunction_for_after_branch)
 				#condition = condition_copy
+				condition.append("skip-conditional")
 
 				# reset path length for instructions after conditional
 				path_length = 0
@@ -544,6 +548,7 @@ class CFG(object):
 				else:
 					empty_conditional_vertex.post_try_catch_vertex = None
 
+				condition.append("skip-try-catch")
 				path_length = 0
 
 			elif type(entry) is ast.For:
@@ -605,6 +610,8 @@ class CFG(object):
 
 				current_vertices = [empty_post_loop_vertex]
 				#current_vertices = final_vertices
+
+				condition.append("skip-for-loop")
 
 				# reset path length for instructions after loop
 				path_length = 0
