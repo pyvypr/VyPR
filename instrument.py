@@ -487,6 +487,7 @@ if __name__ == "__main__":
 					for bind_variable_index in static_qd_to_point_map[m].keys():
 						for (atom_index, point_atom_pair) in enumerate(static_qd_to_point_map[m][bind_variable_index]):
 							print("instrumenting for", atom_index, point_atom_pair)
+
 							points = point_atom_pair[0]
 							atom = point_atom_pair[1]
 							# atom_index is wrt partitions based on variables,
@@ -520,12 +521,15 @@ if __name__ == "__main__":
 								for (n, point) in enumerate(points):
 
 									# send the instrumentation point to the verdict server and get its ID in the database
-									atom_index_in_db = atom_index_to_db_index[atom_index]
+
+									print("atom index %i" % global_atom_index)
+
+									atom_index_in_db = atom_index_to_db_index[global_atom_index]
 									instrumentation_point_dictionary = {
 										"binding" : binding_db_id,
 										"serialised_condition_sequence" : map(pickle.dumps, point._previous_edge._condition if type(point) is CFGVertex else point._condition),
 										"reaching_path_length" : point._path_length if type(point) is CFGVertex else point._target_state._path_length,
-										"atom" : atom_index_to_db_index[atom_index]
+										"atom" : atom_index_to_db_index[global_atom_index]
 									}
 									print(instrumentation_point_dictionary)
 									serialised_dictionary = json.dumps(instrumentation_point_dictionary)
@@ -540,20 +544,22 @@ if __name__ == "__main__":
 
 										timer_start_statement = "__timer_s = datetime.datetime.now()"
 										timer_end_statement = "__timer_e = datetime.datetime.now()"
-										# we put a pair (index in static qd, index in instrumentation points)
-										# this determines the point in the static cfg that will be executed
-										print("point %s has path length %s" % (str(point), str(point._target_state._path_length)))
-										time_difference_statement = ("__duration = __timer_e - __timer_s; %s((\"%s\", \"instrument\", \"%s\", %i, %i, %i, %i, __duration, %i, %i, %s, %i, %i, %i));") %\
-											(verification_instruction, formula_hash, instrument_function_qualifier, m, bind_variable_index,
-												atom_index, n, atoms.index(atom), point._instruction.lineno, map(pickle.dumps, point._condition),
-												point._target_state._path_length, instrumentation_point_db_id, global_atom_index)
 
-										print("Argument specification:")
-										print(
-											dict(
-												[(key, getattr(point._instruction.value, key)) for key in dir(point._instruction.value)]
+										time_difference_statement = "__duration = __timer_e - __timer_s; "
+										instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, {variable_index}," +\
+											"{global_atom_index}, {local_atom_index}, {instrumentation_set_index}, {instrumentation_point_db_id}, {observed_value}")\
+											.format(
+												formula_hash = formula_hash,
+												function_qualifier = instrument_function_qualifier,
+												binding_space_index = m,
+												variable_index = bind_variable_index,
+												global_atom_index = global_atom_index,
+												local_atom_index = atom_index,
+												instrumentation_set_index = n,
+												instrumentation_point_db_id = instrumentation_point_db_id,
+												observed_value = "__duration"
 											)
-										)
+										time_difference_statement += "%s((%s))" % (verification_instruction, instrument_tuple)
 
 										start_ast = ast.parse(timer_start_statement).body[0]
 										end_ast = ast.parse(timer_end_statement).body[0]
@@ -575,8 +581,6 @@ if __name__ == "__main__":
 										# insert instruments in reverse order
 
 										point._instruction._parent_body.insert(index_in_block+1, queue_ast)
-										# the split instruction should be between the difference computation, and before the queue insertion
-										#point._instruction._parent_body.insert(index_in_block+1, split_ast)
 										point._instruction._parent_body.insert(index_in_block+1, difference_ast)
 										point._instruction._parent_body.insert(index_in_block+1, end_ast)
 										point._instruction._parent_body.insert(index_in_block, start_ast)
@@ -592,16 +596,27 @@ if __name__ == "__main__":
 										incident_edge = point._previous_edge
 										parent_block = incident_edge._instruction._parent_body
 
-										# need to adjust this to record the entire state! <- possibly infeasible
-										# we don't need to record the entire state since we record only what the atom needs to observe
 										state_variable_alias = atom._name.replace(".", "_").replace("(", "__").replace(")", "__")
-										record_state = ("record_state_%s = %s; %s((\"%s\", \"instrument\", \"%s\", %i, %i, %i, %i, {'%s' : record_state_%s}, %i, %i, %i, %i));") %\
-											(state_variable_alias, atom._name, verification_instruction, formula_hash, instrument_function_qualifier, m,
-												bind_variable_index, atom_index, n, atom._name, state_variable_alias, atoms.index(atom),
-												incident_edge._instruction.lineno, instrumentation_point_db_id, global_atom_index)
+										state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, atom._name)
 
-										record_state_ast = ast.parse(record_state).body[0]
-										queue_ast = ast.parse(record_state).body[1]
+										instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, {variable_index}," +\
+											"{global_atom_index}, {local_atom_index}, {instrumentation_set_index}, {instrumentation_point_db_id}, {{ '{atom_program_variable}' : {observed_value} }}")\
+											.format(
+												formula_hash = formula_hash,
+												function_qualifier = instrument_function_qualifier,
+												binding_space_index = m,
+												variable_index = bind_variable_index,
+												global_atom_index = global_atom_index,
+												local_atom_index = atom_index,
+												instrumentation_set_index = n,
+												instrumentation_point_db_id = instrumentation_point_db_id,
+												atom_program_variable = atom._name,
+												observed_value = ("record_state_%s" % state_variable_alias)
+											)
+										state_recording_instrument += "%s((%s))" % (verification_instruction, instrument_tuple)
+
+										record_state_ast = ast.parse(state_recording_instrument).body[0]
+										queue_ast = ast.parse(state_recording_instrument).body[1]
 
 										record_state_ast.lineno = incident_edge._instruction.lineno
 										record_state_ast.col_offset = incident_edge._instruction.col_offset

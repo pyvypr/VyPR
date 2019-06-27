@@ -39,7 +39,7 @@ class StateValueInInterval(Atom):
 		self.verdict = None
 
 	def __repr__(self):
-		return "%s(%s) in %s" % (self._state, self._name, self._interval)
+		return "(%s)(%s) in %s" % (self._state, self._interval)
 
 	def __eq__(self, other_atom):
 		if type(other_atom) is StateValueInInterval:
@@ -67,7 +67,7 @@ class StateValueInOpenInterval(Atom):
 		self.verdict = None
 
 	def __repr__(self):
-		return "%s(%s) in %s" % (self._state, self._name, self._interval)
+		return "(%s)(%s) in %s" % (self._state, self._name, self._interval)
 
 	def __eq__(self, other_atom):
 		if type(other_atom) is StateValueInInterval:
@@ -94,7 +94,7 @@ class StateValueEqualTo(Atom):
 		self.verdict = None
 
 	def __repr__(self):
-		return "%s(%s) = %s" % (self._state, self._name, self._value)
+		return "(%s)(%s) = %s" % (self._state, self._name, self._value)
 
 	def __eq__(self, other_atom):
 		if type(other_atom) is StateValueEqualTo:

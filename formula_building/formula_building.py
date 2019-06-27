@@ -10,12 +10,12 @@ Author: Joshua Dawes - CERN, University of Manchester - joshua.dawes@cern.ch
 """
 """
 
-This module contains logic for constructing formulas in the logic found in my notes.
-
 Each possible atom has its own class, ie:
 
 StateValueInInterval - models the atom (s(x) in I) for some state s, a name x and an interval (list) I.
 TransitionDurationInInterval - models the atom (d(delta t) in I) for some transition delta t and an interval (list) I.
+
+Atoms are generated once states or transitions have been described by calling 
 
 """
 
@@ -23,6 +23,10 @@ from monitor_synthesis import formula_tree
 import inspect
 # be careful with versions here...
 from collections import OrderedDict
+
+"""
+General structure-building classes and methods.
+"""
 
 class If(object):
 	"""
@@ -139,11 +143,15 @@ class calls(object):
 	def complete_instantiation(self, bind_variable_name):
 		return StaticTransition(bind_variable_name, self._operates_on, self._required_binding)
 
+"""
+Classes and methods for describing states and transitions.
+Methods labelled with "Generates an atom." takes the state or transition so far and builds a predicate
+over it to generate an atom.
+"""
+
 class StaticState(object):
 	"""
-	Models a binding obtained from a QD consisting of states.
-	Needs to be modified to only allow certain methods (equals, length, etc) to be called
-	if the __call__ method has already been called, and throw an exception otherwise.
+	Models a state attained by the monitored program at runtime.
 	"""
 
 	def __init__(self, bind_variable_name, name_changed, uses=None):
@@ -153,20 +161,10 @@ class StaticState(object):
 		self._required_binding = uses
 
 	def __call__(self, name):
-		self._name = name
-		return self
+		return StateValue(self, name)
 
-	def _in(self, interval):
-		return formula_tree.StateValueInInterval(self, self._name, interval)
-
-	def equals(self, value):
-		return formula_tree.StateValueEqualTo(self, self._name, value)
-
-	def length(self):
-		return formula_tree.StateValueLength(self)
-
-	def _next_transition(self, operates_on):
-		return NextStaticTransition(self, operates_on)
+	def next_call(self, function):
+		return NextStaticTransition(self, function)
 
 	def __repr__(self):
 		if self._required_binding:
@@ -181,21 +179,52 @@ class StaticState(object):
 			self._name_changed == other._name_changed and
 			self._required_binding == other._required_binding)
 
+class StateValue(object):
+	"""
+	Models the value to which some state maps a program variable.
+	"""
+
+	def __init__(self, state, name):
+		self._state = state
+		self._name = name
+
+	def _in(self, interval):
+		"""
+		Generates an atom.
+		"""
+		return formula_tree.StateValueInInterval(self._state, self._name, interval)
+
+	def equals(self, value):
+		"""
+		Generates an atom.
+		"""
+		return formula_tree.StateValueEqualTo(self._state, self._name, value)
+
+	def length(self):
+		"""
+		Generates an atom.
+		"""
+		return formula_tree.StateValueLength(self)
+
+
 class StaticStateLength(object):
 	"""
-	Models the length being measured of a value given by a state from a QD.
+	Models the length being measured of a value given by a state.
 	"""
 
 	def __init__(self, static_state):
 		self._static_state = static_state
 
 	def _in(self, interval):
+		"""
+		Generates an atom.
+		"""
 		return formula_tree.StateValueLengthInInterval(self, self._static_state._name, interval)
 
 
 class StaticTransition(object):
 	"""
-	Models a binding obtained from a QD consisting of transitions.
+	Models transition that occurs during a program's runtime.
 	"""
 
 	def __init__(self, bind_variable_name, operates_on, uses=None):
@@ -206,8 +235,8 @@ class StaticTransition(object):
 	def duration(self):
 		return Duration(self)
 
-	def _next_transition(self, operates_on):
-		return NextStaticTransition(self, operates_on)
+	def next_call(self, function):
+		return NextStaticTransition(self, function)
 
 	def __repr__(self):
 		if self._required_binding:
@@ -230,6 +259,9 @@ class NextStaticTransition(StaticTransition):
 		self._centre = static_object
 		self._operates_on = operates_on
 
+	def next_call(self, function):
+		return NextStaticTransition(self, function)
+
 	def __repr__(self):
 		return "next_transition(%s, %s)" % (str(self._centre), self._operates_on)
 
@@ -248,6 +280,9 @@ class Duration(object):
 		self._transition = transition
 
 	def _in(self, interval):
+		"""
+		Generates an atom.
+		"""
 		if type(interval) is list:
 			return formula_tree.TransitionDurationInInterval(self._transition, interval)
 		elif type(interval) is tuple:
@@ -255,40 +290,22 @@ class Duration(object):
 		else:
 			raise Exception("Duration predicate wasn't defined properly.")
 
-class RuntimeState(object):
-	"""
-	Models a state obtained by observing data at runtime.
-	"""
-
-	def __init__(self, binding):
-		self._binding = binding
-
-	def __repr__(self):
-		return "RuntimeState(_binding=%s)" % self._binding
-
-class RuntimeTransition(object):
-	"""
-	Models a transition observed by observing data at runtime.
-	"""
-
-	def __init__(self, operates_on, duration):
-		self._operates_on = operates_on
-		self._duration = duration
-
-	def __repr__(self):
-		return "RuntimeTransition(_operates_on=%s, _duration=%s)" % (self._operates_on, self._duration)
-
 def derive_composition_sequence(atom):
 	"""
 	Given an atom, derive the sequence of operator compositions.
+	TODO: support nesting with things other than NextStaticTransition
 	"""
 	sequence = [atom]
+	print(atom)
 	if type(atom) is formula_tree.TransitionDurationInInterval:
 		current_operator = atom._transition
 	elif type(atom) is formula_tree.StateValueEqualTo:
 		sequence.append(atom._state)
 		return sequence
 	elif type(atom) is formula_tree.StateValueInInterval:
+		sequence.append(atom._state)
+		return sequence
+	elif type(atom) is formula_tree.ValueGivenByState:
 		sequence.append(atom._state)
 		return sequence
 

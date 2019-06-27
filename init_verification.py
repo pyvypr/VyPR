@@ -73,7 +73,8 @@ def consumption_thread_function(verification_obj):
 
 		print("="*100)
 
-		print("CONSUMING ", top_pair[0:5])
+		print("CONSUMING:")
+		print(top_pair)
 
 		property_hash = top_pair[0]
 
@@ -192,28 +193,27 @@ def consumption_thread_function(verification_obj):
 
 		static_qd_index = top_pair[2]
 		bind_variable_index = top_pair[3]
-		atom_index = top_pair[4]
-		print("atom index", atom_index)
-		instrumentation_set_index = top_pair[5]
-		observed_value = top_pair[6]# this may be redundant now
+		global_atom_index = top_pair[4]
+		"""
+		TODO: when we move away from branch-minimality (monitors will be instantiated directly when triggers are observed),
+		we don't need this local atom index anymore.
+		"""
+		atom_index = top_pair[5]
+		instrumentation_set_index = top_pair[6]
+		instrumentation_point_db_id = top_pair[7]
+		observed_value = top_pair[8]
+
+		print("binding space index", static_qd_index)
+		print("variable index", bind_variable_index)
+		print("global_atom_index", global_atom_index)
+		print("local atom index", atom_index)
+		print("instrumentation set index", instrumentation_set_index)
+		print("instrumentation point db id", instrumentation_point_db_id)
 		print("observed value", observed_value)
-		associated_atom = atoms[atom_index]
-
-		instrumentation_point_db_id = top_pair[-2]
-		global_atom_index = top_pair[-1]
-
-
-		# use the atom with the observed value and the object in the static cfg to decide
-		# on the value of the atom and update the corresponding monitor
-
-		# NOTE: THIS ASSUMES THAT EACH INSTRUMENT IS FOR ONE BINDING - THIS WILL PROBABLY
-		# CHANGE AT SOME POINT SINCE THERE IS INTERSECTION IN INSTRUMENTATION SETS
-		# BETWEEN BINDINGS.
 
 		instrumentation_set = static_qd_to_point_map[static_qd_index][bind_variable_index][atom_index]
-
 		instrumentation_point = instrumentation_set[0][instrumentation_set_index]
-		#instrumentation_atom = instrumentation_set[1]
+
 		instrumentation_atom = atoms[global_atom_index]
 
 		# decide what instrumentation_point can trigger (monitor update, new monitor, or nothing at all)
@@ -272,11 +272,15 @@ def consumption_thread_function(verification_obj):
 					# set the monitor to None
 					atom_to_value_map = new_monitor.atom_to_observation
 					atom_to_program_path_map = new_monitor.atom_to_program_path
-					del new_monitor
+					#del new_monitor
+					static_qd_to_monitors[static_qd_index].remove(new_monitor)
+
+					print("active monitors are now")
+					print(static_qd_to_monitors[static_qd_index])
 
 					print("registering verdict")
 
-					verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, associated_atom, atom_to_program_path_map, global_atom_index)
+					verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, global_atom_index)
 				else:
 					pass
 			else:
@@ -360,8 +364,9 @@ def consumption_thread_function(verification_obj):
 								static_qd_to_monitors[static_qd_index][-1] = None
 								atom_to_value_map = new_monitor.atom_to_observation
 								atom_to_program_path_map = new_monitor.atom_to_program_path
-								del new_monitor
-								verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, associated_atom, atom_to_program_path_map, global_atom_index)
+								#del new_monitor
+								static_qd_to_monitors[static_qd_index].remove(new_monitor)
+								verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, global_atom_index)
 								#send_verdict_report(function_name, maps.latest_time_of_call, verdict_report, binding_to_line_numbers, top_pair[4], top_pair[5])
 							else:
 								pass
@@ -425,7 +430,7 @@ def consumption_thread_function(verification_obj):
 								# set the monitor to None
 								monitors[n] = None
 
-								verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, associated_atom, atom_to_program_path_map, global_atom_index)
+								verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, global_atom_index)
 							else:
 								pass
 						elif not(monitors[n]._state._monitor_instantiation_time in timestamps_handled):
@@ -481,8 +486,9 @@ def consumption_thread_function(verification_obj):
 								static_qd_to_monitors[static_qd_index][-1] = None
 								atom_to_value_map = new_monitor.atom_to_observation
 								atom_to_program_path_map = new_monitor.atom_to_program_path
-								del new_monitor
-								verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, associated_atom, atom_to_program_path_map, global_atom_index)
+								#del new_monitor
+								static_qd_to_monitors[static_qd_index].remove(new_monitor)
+								verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, global_atom_index)
 							else:
 								pass
 
@@ -502,6 +508,8 @@ def consumption_thread_function(verification_obj):
 				# all previous monitors have been evaluated
 				pass
 			else:
+				print("updating existing monitors")
+				print(monitors)
 				# update all the monitors
 				for n in range(len(monitors)):
 					# skip monitors that have reached verdicts
@@ -525,7 +533,7 @@ def consumption_thread_function(verification_obj):
 						# set the monitor to None
 						monitors[n] = None
 
-						verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, associated_atom, atom_to_program_path_map, global_atom_index)
+						verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, global_atom_index)
 					else:
 						if check_monitor_size:
 							add_monitor_size_point(static_qd_index, n, len(monitors[n].get_unresolved_atoms()), sub_verdict, "existing")
