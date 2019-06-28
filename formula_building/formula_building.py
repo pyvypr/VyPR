@@ -360,3 +360,13 @@ def derive_composition_sequence(atom):
 	# add the input bind variable to the composition sequence
 	sequence.append(current_operator)
 	return sequence
+
+def get_base_variable(atom):
+	"""
+	Given an atom, find the StaticState or StaticTransition from which it is derived.
+	"""
+
+	composition_sequence = derive_composition_sequence(atom)
+	variable = composition_sequence[-1]
+
+	return variable
