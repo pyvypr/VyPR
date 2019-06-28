@@ -33,10 +33,10 @@ EXPLANATION = False
 DRAW_GRAPHS = False
 VERIFICATION_HOME_MODULE = None
 
-def print(*s):
+"""def print(*s):
 	global VERBOSE
 	if VERBOSE:
-		__builtins__.print(*s)
+		__builtins__.print(*s)"""
 
 def scfg_to_tree(root):
 	"""
@@ -469,6 +469,10 @@ if __name__ == "__main__":
 								elif type(value_from_binding) is CFGEdge:
 									scfg.next_calls(value_from_binding._target_state, move._operates_on, calls, marked_vertices=[])
 								instrumentation_points = calls
+							elif type(move) is SourceStaticState:
+								instrumentation_points = [value_from_binding]
+							elif type(move) is DestinationStaticState:
+								instrumentation_points = [value_from_binding]
 
 						print(instrumentation_points)
 
@@ -514,6 +518,9 @@ if __name__ == "__main__":
 								index_in_block = instruction._parent_body.index(instruction)
 
 								instruction._parent_body.insert(index_in_block+1, instrument_ast)
+
+								print("new parent block")
+								print(instruction._parent_body)
 
 							else:
 								global_atom_index = atoms.index(atom)
@@ -593,9 +600,6 @@ if __name__ == "__main__":
 										# that is the edge that contains the code that computes the state
 										# this vertex models.
 
-										incident_edge = point._previous_edge
-										parent_block = incident_edge._instruction._parent_body
-
 										state_variable_alias = atom._name.replace(".", "_").replace("(", "__").replace(")", "__")
 										state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, atom._name)
 
@@ -618,17 +622,50 @@ if __name__ == "__main__":
 										record_state_ast = ast.parse(state_recording_instrument).body[0]
 										queue_ast = ast.parse(state_recording_instrument).body[1]
 
-										record_state_ast.lineno = incident_edge._instruction.lineno
-										record_state_ast.col_offset = incident_edge._instruction.col_offset
-										queue_ast.lineno = incident_edge._instruction.lineno
-										queue_ast.col_offset = incident_edge._instruction.col_offset
+										if type(atom._state) is SourceStaticState or type(atom._state) is DestinationStaticState:
+											# if the state we're measuring a property of is derived from a source operator,
+											# then the instrumentation point we're given is an SCFG edge which contains
+											# an instruction for us to place a state recording instrument before
 
-										index_in_block = parent_block.index(incident_edge._instruction)
+											print("adding state recording instrument for source or target")
 
-										# insert instruments in reverse order
+											parent_block = point._instruction._parent_body
 
-										parent_block.insert(index_in_block+1, queue_ast)
-										parent_block.insert(index_in_block+1, record_state_ast)
+											record_state_ast.lineno = point._instruction.lineno
+											record_state_ast.col_offset = point._instruction.col_offset
+											queue_ast.lineno = point._instruction.lineno
+											queue_ast.col_offset = point._instruction.col_offset
+
+											index_in_block = parent_block.index(point._instruction)
+
+											if type(atom._state) is SourceStaticState:
+												print("adding source state recording instrument")
+												# for source state recording, we record the state, but only insert its value after
+												# this is so triggers can be inserted before normal instruments without introducing
+												# a special case for trigger insertion
+												parent_block.insert(index_in_block+1, queue_ast)
+												parent_block.insert(index_in_block, record_state_ast)
+
+												print("new parent body")
+												print(parent_block)
+											elif type(atom._state) is DestinationStaticState:
+												parent_block.insert(index_in_block+1, queue_ast)
+												parent_block.insert(index_in_block+1, record_state_ast)
+										else:
+											incident_edge = point._previous_edge
+											parent_block = incident_edge._instruction._parent_body
+
+											record_state_ast.lineno = incident_edge._instruction.lineno
+											record_state_ast.col_offset = incident_edge._instruction.col_offset
+											queue_ast.lineno = incident_edge._instruction.lineno
+											queue_ast.col_offset = incident_edge._instruction.col_offset
+
+											index_in_block = parent_block.index(incident_edge._instruction)
+
+											# insert instruments in reverse order
+
+											parent_block.insert(index_in_block+1, queue_ast)
+											parent_block.insert(index_in_block+1, record_state_ast)
 
 				if EXPLANATION:
 					# if explanation was turned on in the configuration file, insert path instruments.

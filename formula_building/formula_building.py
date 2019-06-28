@@ -1,6 +1,6 @@
 from __future__ import print_function
-def print(*s):
-	pass
+"""def print(*s):
+	pass"""
 """
 (C) Copyright 2018 CERN and University of Manchester.
 This software is distributed under the terms of the GNU General Public Licence version 3 (GPL Version 3), copied verbatim in the file "COPYING".
@@ -179,6 +179,36 @@ class StaticState(object):
 			self._name_changed == other._name_changed and
 			self._required_binding == other._required_binding)
 
+class SourceStaticState(StaticState):
+	"""
+	Models the source state of a transition.
+	"""
+
+	def __init__(self, outgoing_transition):
+		self._outgoing_transition = outgoing_transition
+
+	def __repr__(self):
+		return "(%s).input()" % self._outgoing_transition
+
+	def __eq__(self, other):
+		return (type(other) is SourceStaticState and
+			self._outgoing_transition == other._outgoing_transition)
+
+class DestinationStaticState(StaticState):
+	"""
+	Models the destination state of a transition.
+	"""
+
+	def __init__(self, incoming_transition):
+		self._incoming_transition = incoming_transition
+
+	def __repr__(self):
+		return "(%s).result()" % self._incoming_transition
+
+	def __eq__(self, other):
+		return (type(other) is DestinationStaticState and
+			self._incoming_transition == other._incoming_transition)
+
 class StateValue(object):
 	"""
 	Models the value to which some state maps a program variable.
@@ -238,6 +268,12 @@ class StaticTransition(object):
 	def next_call(self, function):
 		return NextStaticTransition(self, function)
 
+	def input(self):
+		return SourceStaticState(self)
+
+	def result(self):
+		return DestinationStaticState(self)
+
 	def __repr__(self):
 		if self._required_binding:
 			return "%s = StaticTransition(operates_on=%s, uses=%s)" % (self._bind_variable_name, self._operates_on, self._required_binding)
@@ -259,11 +295,8 @@ class NextStaticTransition(StaticTransition):
 		self._centre = static_object
 		self._operates_on = operates_on
 
-	def next_call(self, function):
-		return NextStaticTransition(self, function)
-
 	def __repr__(self):
-		return "next_transition(%s, %s)" % (str(self._centre), self._operates_on)
+		return "(%s).next_call(%s)" % (str(self._centre), self._operates_on)
 
 	def __eq__(self, other):
 		return (type(other) is NextStaticTransition and
@@ -295,23 +328,34 @@ def derive_composition_sequence(atom):
 	Given an atom, derive the sequence of operator compositions.
 	TODO: support nesting with things other than NextStaticTransition
 	"""
-	sequence = [atom]
+	"""sequence = [atom]
 	print(atom)
-	if type(atom) is formula_tree.TransitionDurationInInterval:
-		current_operator = atom._transition
-	elif type(atom) is formula_tree.StateValueEqualTo:
-		sequence.append(atom._state)
-		return sequence
-	elif type(atom) is formula_tree.StateValueInInterval:
-		sequence.append(atom._state)
-		return sequence
-	elif type(atom) is formula_tree.ValueGivenByState:
-		sequence.append(atom._state)
-		return sequence
 
 	while type(current_operator) is NextStaticTransition:
 		sequence.append(current_operator)
-		current_operator = current_operator._centre
+		current_operator = current_operator._centre"""
+
+	sequence = [atom]
+	current_operator = atom
+
+	if type(atom) is formula_tree.TransitionDurationInInterval:
+		current_operator = atom._transition
+	elif type(atom) is formula_tree.StateValueEqualTo:
+		current_operator = atom._state
+	elif type(atom) is formula_tree.StateValueInInterval:
+		current_operator = atom._state
+	elif type(atom) is formula_tree.ValueGivenByState:
+		current_operator = atom._state
+
+	while not(type(current_operator) in [StaticState, StaticTransition]):
+		sequence.append(current_operator)
+		if type(current_operator) is SourceStaticState:
+			current_operator = current_operator._outgoing_transition
+		elif type(current_operator) is DestinationStaticState:
+			current_operator = current_operator._incoming_transition
+		elif type(current_operator) is NextStaticTransition:
+			current_operator = current_operator._centre
+
 
 	# add the input bind variable to the composition sequence
 	sequence.append(current_operator)
