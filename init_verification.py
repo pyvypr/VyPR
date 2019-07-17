@@ -45,7 +45,17 @@ def send_verdict_report(function_name, time_of_call, verdict_report, binding_to_
 				"function_name" : function_name,
 				"time_of_call" : time_of_call.isoformat(),
 				"bind_space_index" : bind_space_index,
-				"verdict" : json.dumps([verdict[0], verdict[1].isoformat(), verdict[2], verdict[3], verdict[4]], default=to_timestamp),
+				"verdict" : json.dumps(
+						[
+							verdict[0],
+							verdict[1].isoformat(),
+							verdict[2],
+							verdict[3],
+							verdict[4],
+							verdict[5]
+						],
+						default=to_timestamp
+					),
 				"line_numbers" : json.dumps(binding_to_line_numbers[bind_space_index]),
 				"http_request_time" : http_request_time.isoformat(),
 				"property_hash" : property_hash
@@ -197,6 +207,14 @@ def consumption_thread_function(verification_obj):
 		instrumentation_set_indices = top_pair[5]
 		instrumentation_point_db_ids = top_pair[6]
 		observed_value = top_pair[7]
+		thread_id = top_pair[8]
+		try:
+			state_dict = top_pair[9]
+		except:
+			# instrument isn't from a transition measurement
+			state_dict = None
+
+		print("consuming data from an instrument in thread %i" % thread_id)
 
 		lists = zip(static_qd_indices, bind_variable_indices, atom_indices, instrumentation_set_indices, instrumentation_point_db_ids)
 
@@ -214,6 +232,7 @@ def consumption_thread_function(verification_obj):
 			print("instrumentation set index", instrumentation_set_index)
 			print("instrumentation point db id", instrumentation_point_db_id)
 			print("observed value", observed_value)
+			print("state dictionary", state_dict)
 
 			instrumentation_point = static_qd_to_point_map[static_qd_index][bind_variable_index][atom_index][instrumentation_set_index]
 			instrumentation_atom = atoms[atom_index]
@@ -259,7 +278,7 @@ def consumption_thread_function(verification_obj):
 
 					# update the monitor with the newly observed data
 					sub_verdict = new_monitor.process_atom_and_value(instrumentation_atom, observed_value, atom_index,
-						inst_point_id=instrumentation_point_db_id, program_path=program_path)
+						inst_point_id=instrumentation_point_db_id, program_path=program_path, state_dict=state_dict)
 					print(sub_verdict)
 					if sub_verdict == True or sub_verdict == False:
 
@@ -274,6 +293,7 @@ def consumption_thread_function(verification_obj):
 						# set the monitor to None
 						atom_to_value_map = new_monitor.atom_to_observation
 						atom_to_program_path_map = new_monitor.atom_to_program_path
+						atom_to_state_dict_map = new_monitor.atom_to_state_dict
 						#del new_monitor
 						static_qd_to_monitors[static_qd_index].remove(new_monitor)
 
@@ -282,7 +302,15 @@ def consumption_thread_function(verification_obj):
 
 						print("registering verdict")
 
-						verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, atom_index)
+						verdict_report.add_verdict(
+							static_qd_index,
+							sub_verdict,
+							atom_to_value_map,
+							instrumentation_atom,
+							atom_to_program_path_map,
+							atom_index,
+							atom_to_state_dict_map
+						)
 					else:
 						pass
 				else:
@@ -341,7 +369,7 @@ def consumption_thread_function(verification_obj):
 
 							if not(configuration._state.get(associated_atom_key) is None):
 								sub_verdict = new_monitor.process_atom_and_value(instrumentation_atom, observed_value, atom_index,
-									inst_point_id=instrumentation_point_db_id, program_path=program_path)
+									inst_point_id=instrumentation_point_db_id, program_path=program_path, state_dict=state_dict)
 
 								# we need to copy the instantiation time of the configuration to the monitor's state
 								new_monitor._state._monitor_instantiation_time = list(configuration._monitor_instantiation_time)
@@ -366,9 +394,18 @@ def consumption_thread_function(verification_obj):
 									static_qd_to_monitors[static_qd_index][-1] = None
 									atom_to_value_map = new_monitor.atom_to_observation
 									atom_to_program_path_map = new_monitor.atom_to_program_path
+									atom_to_state_dict_map = new_monitor.atom_to_state_dict
 									#del new_monitor
 									static_qd_to_monitors[static_qd_index].remove(new_monitor)
-									verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, atom_index)
+									verdict_report.add_verdict(
+										static_qd_index,
+										sub_verdict,
+										atom_to_value_map,
+										instrumentation_atom,
+										atom_to_program_path_map,
+										atom_index,
+										atom_to_state_dict_map
+									)
 									#send_verdict_report(function_name, maps.latest_time_of_call, verdict_report, binding_to_line_numbers, top_pair[4], top_pair[5])
 								else:
 									pass
@@ -382,7 +419,8 @@ def consumption_thread_function(verification_obj):
 								# is to reject new observations if a verdict has already been reached
 								print("updating a configuration that hasn't observed this atom")
 								new_monitor.process_atom_and_value(instrumentation_atom, observed_value, atom_index,
-									force_monitor_update=True, inst_point_id=instrumentation_point_db_id, program_path=program_path)
+									force_monitor_update=True, inst_point_id=instrumentation_point_db_id,
+									program_path=program_path, state_dict=state_dict)
 								static_bindings_to_monitor_states[static_qd_index][timestamp]._state = new_monitor._state._state
 					else:
 						print("No previous configurations")
@@ -408,7 +446,7 @@ def consumption_thread_function(verification_obj):
 							# if this monitor hasn't observed this instrument yet, then simply update it
 							if not(monitors[n]._state._state.get(associated_atom_key)):
 								sub_verdict = monitors[n].process_atom_and_value(instrumentation_atom, observed_value, atom_index,
-									inst_point_id=instrumentation_point_db_id, program_path=program_path)
+									inst_point_id=instrumentation_point_db_id, program_path=program_path, state_dict=state_dict)
 								if sub_verdict == True or sub_verdict == False:
 									# update monitor instantiation timestamp sequence
 									monitors[n]._state._monitor_instantiation_time = list(monitors[n]._state._monitor_instantiation_time)
@@ -428,10 +466,19 @@ def consumption_thread_function(verification_obj):
 									# set the monitor to None
 									atom_to_value_map = monitors[n].atom_to_observation
 									atom_to_program_path_map = monitors[n].atom_to_program_path
+									atom_to_state_dict_map = monitors[n].atom_to_state_dict
 									# set the monitor to None
 									monitors[n] = None
 
-									verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, atom_index)
+									verdict_report.add_verdict(
+										static_qd_index,
+										sub_verdict,
+										atom_to_value_map,
+										instrumentation_atom,
+										atom_to_program_path_map,
+										atom_index,
+										atom_to_state_dict_map
+									)
 								else:
 									pass
 							elif not(monitors[n]._state._monitor_instantiation_time in timestamps_handled):
@@ -461,7 +508,7 @@ def consumption_thread_function(verification_obj):
 
 								# update the monitor with the newly observed data
 								sub_verdict = new_monitor.process_atom_and_value(instrumentation_atom, observed_value, atom_index,
-									inst_point_id=instrumentation_point_db_id, program_path=program_path)
+									inst_point_id=instrumentation_point_db_id, program_path=program_path, state_dict=state_dict)
 
 								# we need to copy the instantiation time of the configuration to the monitor's state
 								new_monitor._state._monitor_instantiation_time = list(monitors[n]._state._monitor_instantiation_time)
@@ -487,9 +534,18 @@ def consumption_thread_function(verification_obj):
 									static_qd_to_monitors[static_qd_index][-1] = None
 									atom_to_value_map = new_monitor.atom_to_observation
 									atom_to_program_path_map = new_monitor.atom_to_program_path
+									atom_to_state_dict_map = new_monitor.atom_to_state_dict
 									#del new_monitor
 									static_qd_to_monitors[static_qd_index].remove(new_monitor)
-									verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, atom_index)
+									verdict_report.add_verdict(
+										static_qd_index,
+										sub_verdict,
+										atom_to_value_map,
+										instrumentation_atom,
+										atom_to_program_path_map,
+										atom_index,
+										atom_to_state_dict_map
+									)
 								else:
 									pass
 
@@ -518,7 +574,7 @@ def consumption_thread_function(verification_obj):
 							continue
 
 						sub_verdict = monitors[n].process_atom_and_value(instrumentation_atom, observed_value, atom_index,
-							inst_point_id=instrumentation_point_db_id, program_path=program_path)
+							inst_point_id=instrumentation_point_db_id, program_path=program_path, state_dict=state_dict)
 						if sub_verdict == True or sub_verdict == False:
 
 							# record the monitor state with the binding
@@ -531,10 +587,19 @@ def consumption_thread_function(verification_obj):
 							# set the monitor to None
 							atom_to_value_map = monitors[n].atom_to_observation
 							atom_to_program_path_map = monitors[n].atom_to_program_path
+							atom_to_state_dict_map = monitors[n].atom_to_state_dict
 							# set the monitor to None
 							monitors[n] = None
 
-							verdict_report.add_verdict(static_qd_index, sub_verdict, atom_to_value_map, instrumentation_atom, atom_to_program_path_map, atom_index)
+							verdict_report.add_verdict(
+								static_qd_index,
+								sub_verdict,
+								atom_to_value_map,
+								instrumentation_atom,
+								atom_to_program_path_map,
+								atom_index,
+								atom_to_state_dict_map
+							)
 						else:
 							if check_monitor_size:
 								add_monitor_size_point(static_qd_index, n, len(monitors[n].get_unresolved_atoms()), sub_verdict, "existing")

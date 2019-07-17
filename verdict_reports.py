@@ -18,13 +18,34 @@ class VerdictReport(object):
 		self._bind_space_to_verdicts = {}
 		self.map_lock = Lock()
 
-	def add_verdict(self, bind_space_index, verdict, atom_to_value_map, atom, atom_to_program_path_map, collapsing_atom_index):
+	def add_verdict(
+				self, bind_space_index, verdict, atom_to_value_map,
+				atom, atom_to_program_path_map, collapsing_atom_index,
+				atom_to_state_dict_map
+		):
 		self.map_lock.acquire()
 		#print("ADDING VERDICT FOR QD INDEX %i" % bind_space_index)
 		if not(self._bind_space_to_verdicts.get(bind_space_index)):
-			self._bind_space_to_verdicts[bind_space_index] = [(verdict, datetime.datetime.now(), atom_to_value_map, atom_to_program_path_map, collapsing_atom_index)]
+			self._bind_space_to_verdicts[bind_space_index] =\
+				[(
+					verdict,
+					datetime.datetime.now(),
+					atom_to_value_map,
+					atom_to_program_path_map,
+					collapsing_atom_index,
+					atom_to_state_dict_map
+				)]
 		else:
-			self._bind_space_to_verdicts[bind_space_index].append((verdict, datetime.datetime.now(), atom_to_value_map, atom_to_program_path_map, collapsing_atom_index))
+			self._bind_space_to_verdicts[bind_space_index].append(
+				(
+					verdict,
+					datetime.datetime.now(),
+					atom_to_value_map,
+					atom_to_program_path_map,
+					collapsing_atom_index,
+					atom_to_state_dict_map
+				)
+			)
 		self.map_lock.release()
 
 	def get_final_verdict_report(self):

@@ -69,7 +69,8 @@ class Forall(object):
 		to reference the actual bind variable value in the bind_variables dictionary
 		"""
 		if not(is_first):
-			bind_variable_obj._required_binding = self.bind_variables[bind_variable_obj._required_binding]
+			bind_variable_obj._required_binding =\
+				self.bind_variables[bind_variable_obj._required_binding]
 
 		bind_variable_final = bind_variable_obj.complete_instantiation(bind_variable_name)
 		if self.bind_variables is None:
@@ -86,11 +87,16 @@ class Forall(object):
 		if self._formula is None:
 			return "Forall(%s)" % self.bind_variables
 		else:
-			return "Forall(%s).Formula(%s)" % (self.bind_variables, self.get_formula_instance())
+			return "Forall(%s).Formula(%s)" %\
+				(self.bind_variables, self.get_formula_instance())
 
 	def Forall(self, **bind_variable):
 		# return an instance 
-		return Forall(is_first=False, bind_variables=self.bind_variables, **bind_variable)
+		return Forall(
+			is_first=False,
+			bind_variables=self.bind_variables,
+			**bind_variable
+		)
 
 	def get(self, key):
 		return self.bind_variables[key]
@@ -106,7 +112,8 @@ class Forall(object):
 		"""
 		self._formula = formula_lambda
 		# generate instantiated formula to compute its atoms
-		self._formula_atoms = formula_tree.get_positive_formula_alphabet(self.get_formula_instance())
+		self._formula_atoms =\
+			formula_tree.get_positive_formula_alphabet(self.get_formula_instance())
 		return self
 
 	def get_formula_instance(self):
@@ -115,7 +122,10 @@ class Forall(object):
 		"""
 		# use the arguments of the lambda function
 		argument_names = inspect.getargspec(self._formula).args
-		bind_variables = map(lambda arg_name : self.bind_variables[arg_name], argument_names)
+		bind_variables = map(
+			lambda arg_name : self.bind_variables[arg_name],
+			argument_names
+		)
 		return self._formula(*bind_variables)
 
 class changes(object):
@@ -129,7 +139,11 @@ class changes(object):
 		self._required_binding = after
 
 	def complete_instantiation(self, bind_variable_name):
-		return StaticState(bind_variable_name, self._name_changed, self._required_binding)
+		return StaticState(
+			bind_variable_name,
+			self._name_changed,
+			self._required_binding
+		)
 
 class calls(object):
 	"""
@@ -141,12 +155,15 @@ class calls(object):
 		self._required_binding = after
 
 	def complete_instantiation(self, bind_variable_name):
-		return StaticTransition(bind_variable_name, self._operates_on, self._required_binding)
+		return StaticTransition(
+			bind_variable_name,
+			self._operates_on, self._required_binding
+		)
 
 """
 Classes and methods for describing states and transitions.
-Methods labelled with "Generates an atom." takes the state or transition so far and builds a predicate
-over it to generate an atom.
+Methods labelled with "Generates an atom." takes the state
+or transition so far and builds a predicate over it to generate an atom.
 """
 
 class StaticState(object):
@@ -163,14 +180,22 @@ class StaticState(object):
 	def __call__(self, name):
 		return StateValue(self, name)
 
-	def next_call(self, function):
-		return NextStaticTransition(self, function)
+	def next_call(self, function, record=None):
+		"""
+		record will only matter for the final instrumentation
+		points if there is nesting.  It is a list of variable
+		values to record at the start of the next call to function.
+		"""
+		return NextStaticTransition(self, function, record=record)
 
 	def __repr__(self):
 		if self._required_binding:
-			return "%s = StaticState(changes=%s, uses=%s)" % (self._bind_variable_name, self._name_changed, self._required_binding)
+			return "%s = StaticState(changes=%s, uses=%s)" %\
+				(self._bind_variable_name, self._name_changed,
+					self._required_binding)
 		else:
-			return "%s = StaticState(changes=%s)" % (self._bind_variable_name, self._name_changed)
+			return "%s = StaticState(changes=%s)" %\
+				(self._bind_variable_name, self._name_changed)
 
 	def __eq__(self, other):
 		return (type(other) is StaticState and
@@ -222,18 +247,23 @@ class StateValue(object):
 		"""
 		Generates an atom.
 		"""
-		return formula_tree.StateValueInInterval(self._state, self._name, interval)
+		return formula_tree.StateValueInInterval(
+			self._state,
+			self._name,
+			interval
+		)
 
 	def equals(self, value):
 		"""
 		Generates an atom.
 		"""
-		return formula_tree.StateValueEqualTo(self._state, self._name, value)
+		return formula_tree.StateValueEqualTo(
+			self._state,
+			self._name,
+			value
+		)
 
 	def length(self):
-		"""
-		Generates an atom.
-		"""
 		return formula_tree.StateValueLength(self)
 
 
@@ -249,7 +279,11 @@ class StaticStateLength(object):
 		"""
 		Generates an atom.
 		"""
-		return formula_tree.StateValueLengthInInterval(self, self._static_state._name, interval)
+		return formula_tree.StateValueLengthInInterval(
+			self,
+			self._static_state._name,
+			interval
+		)
 
 
 class StaticTransition(object):
@@ -257,16 +291,21 @@ class StaticTransition(object):
 	Models transition that occurs during a program's runtime.
 	"""
 
-	def __init__(self, bind_variable_name, operates_on, uses=None):
+	def __init__(self, bind_variable_name, operates_on, uses=None, record=None):
 		self._bind_variable_name = bind_variable_name
 		self._operates_on = operates_on
 		self._required_binding = uses
+		self._record = record
 
 	def duration(self):
 		return Duration(self)
 
-	def next_call(self, function):
-		return NextStaticTransition(self, function)
+	def next_call(self, function, record=None):
+		"""
+		record will only matter for the final instrumentation points if there is nesting.
+		It is a list of variable values to record at the start of the next call to function.
+		"""
+		return NextStaticTransition(self, function, record=record)
 
 	def input(self):
 		return SourceStaticState(self)
@@ -276,9 +315,21 @@ class StaticTransition(object):
 
 	def __repr__(self):
 		if self._required_binding:
-			return "%s = StaticTransition(operates_on=%s, uses=%s)" % (self._bind_variable_name, self._operates_on, self._required_binding)
+			if self._record:
+				return "%s = StaticTransition(operates_on=%s, uses=%s, record=%s)" %\
+					(self._bind_variable_name, self._operates_on,
+						self._required_binding, str(self._record))
+			else:
+				return "%s = StaticTransition(operates_on=%s, uses=%s)" %\
+					(self._bind_variable_name, self._operates_on,
+						self._required_binding)
 		else:
-			return "%s = StaticTransition(operates_on=%s)" % (self._bind_variable_name, self._operates_on)
+			if self._record:
+				return "%s = StaticTransition(operates_on=%s, record=%s)" %\
+					(self._bind_variable_name, self._operates_on, str(self._record))
+			else:
+				return "%s = StaticTransition(operates_on=%s)" %\
+					(self._bind_variable_name, self._operates_on)
 
 	def __eq__(self, other):
 		return (type(other) is StaticTransition and
@@ -291,12 +342,17 @@ class NextStaticTransition(StaticTransition):
 	Models a next transition obtained from another static object.
 	"""
 
-	def __init__(self, static_object, operates_on):
+	def __init__(self, static_object, operates_on, record=None):
 		self._centre = static_object
 		self._operates_on = operates_on
+		self._record = record
 
 	def __repr__(self):
-		return "(%s).next_call(%s)" % (str(self._centre), self._operates_on)
+		if self._record:
+			return "(%s).next_call(%s, record=%s)" %\
+				(str(self._centre), self._operates_on, str(self._record))
+		else:
+			return "(%s).next_call(%s)" % (str(self._centre), self._operates_on)
 
 	def __eq__(self, other):
 		return (type(other) is NextStaticTransition and
@@ -317,9 +373,15 @@ class Duration(object):
 		Generates an atom.
 		"""
 		if type(interval) is list:
-			return formula_tree.TransitionDurationInInterval(self._transition, interval)
+			return formula_tree.TransitionDurationInInterval(
+				self._transition,
+				interval
+			)
 		elif type(interval) is tuple:
-			return formula_tree.TransitionDurationInOpenInterval(self._transition, interval)
+			return formula_tree.TransitionDurationInOpenInterval(
+				self._transition,
+				interval
+			)
 		else:
 			raise Exception("Duration predicate wasn't defined properly.")
 

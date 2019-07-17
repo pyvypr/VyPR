@@ -33,10 +33,10 @@ EXPLANATION = False
 DRAW_GRAPHS = False
 VERIFICATION_HOME_MODULE = None
 
-"""def print(*s):
+def print(*s):
 	global VERBOSE
 	if VERBOSE:
-		__builtins__.print(*s)"""
+		__builtins__.print(*s)
 
 def scfg_to_tree(root):
 	"""
@@ -563,12 +563,24 @@ if __name__ == "__main__":
 
 						if type(atom) is formula_tree.TransitionDurationInInterval:
 
+							composition_sequence = derive_composition_sequence(atom)
+							composition_sequence = list(reversed(composition_sequence[1:-1]))
+
+							if composition_sequence[0]._record:
+								states = []
+								for var in composition_sequence[0]._record:
+									states.append("'%s' : %s" % (var, var))
+								state_string = ", ".join(states)
+								state_dict = "{%s}" % state_string
+							else:
+								state_dict = "{}"
+
 							timer_start_statement = "__timer_s = datetime.datetime.now()"
 							timer_end_statement = "__timer_e = datetime.datetime.now()"
 
 							time_difference_statement = "__duration = __timer_e - __timer_s; "
 							instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, {variable_index}," +\
-								"{global_atom_index}, {instrumentation_set_index}, {instrumentation_point_db_id}, {observed_value}")\
+								"{global_atom_index}, {instrumentation_set_index}, {instrumentation_point_db_id}, {observed_value}, __thread_id, {state_dict}")\
 								.format(
 									formula_hash = formula_hash,
 									function_qualifier = instrument_function_qualifier,
@@ -577,7 +589,8 @@ if __name__ == "__main__":
 									global_atom_index = list_of_lists[2],
 									instrumentation_set_index = list_of_lists[3],
 									instrumentation_point_db_id = list_of_lists[4],
-									observed_value = "__duration"
+									observed_value = "__duration",
+									state_dict = state_dict
 								)
 							time_difference_statement += "%s((%s))" % (verification_instruction, instrument_tuple)
 
@@ -594,7 +607,6 @@ if __name__ == "__main__":
 							difference_ast.col_offset = point._instruction.col_offset
 							queue_ast.lineno = point._instruction.lineno
 							queue_ast.col_offset = point._instruction.col_offset
-                                                                    
 
 							index_in_block = point._instruction._parent_body.index(point._instruction)
 
@@ -617,7 +629,7 @@ if __name__ == "__main__":
 							state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, atom._name)
 
 							instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, {variable_index}," +\
-								"{global_atom_index}, {instrumentation_set_index}, {instrumentation_point_db_id}, {{ '{atom_program_variable}' : {observed_value} }}")\
+								"{global_atom_index}, {instrumentation_set_index}, {instrumentation_point_db_id}, {{ '{atom_program_variable}' : {observed_value} }}, __thread_id")\
 								.format(
 									formula_hash = formula_hash,
 									function_qualifier = instrument_function_qualifier,
@@ -791,19 +803,28 @@ if __name__ == "__main__":
 	
 				# NOTE: only problem with this is that the "end" instrument is inserted before the return,
 				# so a function call in the return statement maybe missed if it's part of verification...
-				start_instrument = "%s((\"%s\", \"function\", \"%s\", \"start\", flask.g.request_time, \"%s\"))"\
+				thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
+				start_instrument = "%s((\"%s\", \"function\", \"%s\", \"start\", flask.g.request_time, \"%s\", __thread_id))"\
 							% (verification_instruction, formula_hash, instrument_function_qualifier, formula_hash)
 
+				threading_import_ast = ast.parse(thread_id_capture).body[0]
+				thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
 				start_ast = ast.parse(start_instrument).body[0]
 	
+				threading_import_ast.lineno = function_def.body[0].lineno
+				threading_import_ast.col_offset = function_def.body[0].col_offset
+				thread_id_capture_ast.lineno = function_def.body[0].lineno
+				thread_id_capture_ast.col_offset = function_def.body[0].col_offset
 				start_ast.lineno = function_def.body[0].lineno
 				start_ast.col_offset = function_def.body[0].col_offset
 	
 				function_def.body.insert(0, start_ast)
+				function_def.body.insert(0, thread_id_capture_ast)
+				function_def.body.insert(0, threading_import_ast)
 							
 				# insert the end instrument before every return statement
 				for end_vertex in scfg.return_statements:
-					end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\"))"\
+					end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id))"\
 										% (verification_instruction, formula_hash, instrument_function_qualifier, formula_hash)
 					end_ast = ast.parse(end_instrument).body[0]
 

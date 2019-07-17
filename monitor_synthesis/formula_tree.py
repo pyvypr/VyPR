@@ -429,6 +429,7 @@ class Checker(object):
 		self._optimised = optimised
 		self.atom_to_observation = {}
 		self.atom_to_program_path = {}
+		self.atom_to_state_dict = {}
 
 		if self._optimised:
 			self.construct_atom_formula_occurrence_map(self._formula)
@@ -504,7 +505,9 @@ class Checker(object):
 	def __repr__(self):
 		return "Monitor state for formula %s is %s" % (self._original_formula, str(self._formula))
 
-	def process_atom_and_value(self, atom, value, atom_index, force_monitor_update=False, inst_point_id=None, program_path=None):
+	def process_atom_and_value(self, atom, value, atom_index,
+							force_monitor_update=False, inst_point_id=None,
+							program_path=None, state_dict=None):
 		"""
 		Given an atom and a value, update this monitor.
 		"""
@@ -514,6 +517,7 @@ class Checker(object):
 			self.atom_to_observation[atom_index] = (value, inst_point_id)
 		# we always overwrite this
 		self.atom_to_program_path[atom_index] = [v for v in program_path]
+		self.atom_to_state_dict[atom_index] = state_dict
 		
 		print("PROCESSING ATOM %s" % atom)
 		if type(atom) is StateValueInInterval:
