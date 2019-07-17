@@ -564,7 +564,7 @@ if __name__ == "__main__":
 						if type(atom) is formula_tree.TransitionDurationInInterval:
 
 							composition_sequence = derive_composition_sequence(atom)
-							composition_sequence = list(reversed(composition_sequence[1:-1]))
+							composition_sequence = list(reversed(composition_sequence[1:]))
 
 							if composition_sequence[0]._record:
 								states = []
