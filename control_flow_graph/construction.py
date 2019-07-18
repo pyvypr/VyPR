@@ -1,6 +1,6 @@
 from __future__ import print_function
-def print(*s):
-	pass
+"""def print(*s):
+	pass"""
 """
 (C) Copyright 2018 CERN and University of Manchester.
 This software is distributed under the terms of the GNU General Public Licence version 3 (GPL Version 3), copied verbatim in the file "COPYING".

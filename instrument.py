@@ -33,10 +33,10 @@ EXPLANATION = False
 DRAW_GRAPHS = False
 VERIFICATION_HOME_MODULE = None
 
-def print(*s):
+"""def print(*s):
 	global VERBOSE
 	if VERBOSE:
-		__builtins__.print(*s)
+		__builtins__.print(*s)"""
 
 def scfg_to_tree(root):
 	"""
@@ -564,11 +564,11 @@ if __name__ == "__main__":
 						if type(atom) is formula_tree.TransitionDurationInInterval:
 
 							composition_sequence = derive_composition_sequence(atom)
-							composition_sequence = list(reversed(composition_sequence[1:]))
+							composition_sequence = list(reversed(composition_sequence))[:-1]
 
-							if composition_sequence[0]._record:
+							if composition_sequence[-1]._record:
 								states = []
-								for var in composition_sequence[0]._record:
+								for var in composition_sequence[-1]._record:
 									states.append("'%s' : %s" % (var, var))
 								state_string = ", ".join(states)
 								state_dict = "{%s}" % state_string
