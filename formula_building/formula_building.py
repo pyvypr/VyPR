@@ -1,6 +1,6 @@
 from __future__ import print_function
-def print(*s):
-	pass
+"""def print(*s):
+	pass"""
 """
 (C) Copyright 2018 CERN and University of Manchester.
 This software is distributed under the terms of the GNU General Public Licence version 3 (GPL Version 3), copied verbatim in the file "COPYING".
@@ -10,12 +10,12 @@ Author: Joshua Dawes - CERN, University of Manchester - joshua.dawes@cern.ch
 """
 """
 
-This module contains logic for constructing formulas in the logic found in my notes.
-
 Each possible atom has its own class, ie:
 
 StateValueInInterval - models the atom (s(x) in I) for some state s, a name x and an interval (list) I.
 TransitionDurationInInterval - models the atom (d(delta t) in I) for some transition delta t and an interval (list) I.
+
+Atoms are generated once states or transitions have been described by calling 
 
 """
 
@@ -23,6 +23,10 @@ from monitor_synthesis import formula_tree
 import inspect
 # be careful with versions here...
 from collections import OrderedDict
+
+"""
+General structure-building classes and methods.
+"""
 
 class If(object):
 	"""
@@ -65,7 +69,8 @@ class Forall(object):
 		to reference the actual bind variable value in the bind_variables dictionary
 		"""
 		if not(is_first):
-			bind_variable_obj._required_binding = self.bind_variables[bind_variable_obj._required_binding]
+			bind_variable_obj._required_binding =\
+				self.bind_variables[bind_variable_obj._required_binding]
 
 		bind_variable_final = bind_variable_obj.complete_instantiation(bind_variable_name)
 		if self.bind_variables is None:
@@ -82,11 +87,16 @@ class Forall(object):
 		if self._formula is None:
 			return "Forall(%s)" % self.bind_variables
 		else:
-			return "Forall(%s).Formula(%s)" % (self.bind_variables, self.get_formula_instance())
+			return "Forall(%s).Formula(%s)" %\
+				(self.bind_variables, self.get_formula_instance())
 
 	def Forall(self, **bind_variable):
 		# return an instance 
-		return Forall(is_first=False, bind_variables=self.bind_variables, **bind_variable)
+		return Forall(
+			is_first=False,
+			bind_variables=self.bind_variables,
+			**bind_variable
+		)
 
 	def get(self, key):
 		return self.bind_variables[key]
@@ -102,7 +112,8 @@ class Forall(object):
 		"""
 		self._formula = formula_lambda
 		# generate instantiated formula to compute its atoms
-		self._formula_atoms = formula_tree.get_positive_formula_alphabet(self.get_formula_instance())
+		self._formula_atoms =\
+			formula_tree.get_positive_formula_alphabet(self.get_formula_instance())
 		return self
 
 	def get_formula_instance(self):
@@ -111,7 +122,10 @@ class Forall(object):
 		"""
 		# use the arguments of the lambda function
 		argument_names = inspect.getargspec(self._formula).args
-		bind_variables = map(lambda arg_name : self.bind_variables[arg_name], argument_names)
+		bind_variables = map(
+			lambda arg_name : self.bind_variables[arg_name],
+			argument_names
+		)
 		return self._formula(*bind_variables)
 
 class changes(object):
@@ -125,7 +139,11 @@ class changes(object):
 		self._required_binding = after
 
 	def complete_instantiation(self, bind_variable_name):
-		return StaticState(bind_variable_name, self._name_changed, self._required_binding)
+		return StaticState(
+			bind_variable_name,
+			self._name_changed,
+			self._required_binding
+		)
 
 class calls(object):
 	"""
@@ -137,13 +155,20 @@ class calls(object):
 		self._required_binding = after
 
 	def complete_instantiation(self, bind_variable_name):
-		return StaticTransition(bind_variable_name, self._operates_on, self._required_binding)
+		return StaticTransition(
+			bind_variable_name,
+			self._operates_on, self._required_binding
+		)
+
+"""
+Classes and methods for describing states and transitions.
+Methods labelled with "Generates an atom." takes the state
+or transition so far and builds a predicate over it to generate an atom.
+"""
 
 class StaticState(object):
 	"""
-	Models a binding obtained from a QD consisting of states.
-	Needs to be modified to only allow certain methods (equals, length, etc) to be called
-	if the __call__ method has already been called, and throw an exception otherwise.
+	Models a state attained by the monitored program at runtime.
 	"""
 
 	def __init__(self, bind_variable_name, name_changed, uses=None):
@@ -153,26 +178,24 @@ class StaticState(object):
 		self._required_binding = uses
 
 	def __call__(self, name):
-		self._name = name
-		return self
+		return StateValue(self, name)
 
-	def _in(self, interval):
-		return formula_tree.StateValueInInterval(self, self._name, interval)
-
-	def equals(self, value):
-		return formula_tree.StateValueEqualTo(self, self._name, value)
-
-	def length(self):
-		return formula_tree.StateValueLength(self)
-
-	def _next_transition(self, operates_on):
-		return NextStaticTransition(self, operates_on)
+	def next_call(self, function, record=None):
+		"""
+		record will only matter for the final instrumentation
+		points if there is nesting.  It is a list of variable
+		values to record at the start of the next call to function.
+		"""
+		return NextStaticTransition(self, function, record=record)
 
 	def __repr__(self):
 		if self._required_binding:
-			return "%s = StaticState(changes=%s, uses=%s)" % (self._bind_variable_name, self._name_changed, self._required_binding)
+			return "%s = StaticState(changes=%s, uses=%s)" %\
+				(self._bind_variable_name, self._name_changed,
+					self._required_binding)
 		else:
-			return "%s = StaticState(changes=%s)" % (self._bind_variable_name, self._name_changed)
+			return "%s = StaticState(changes=%s)" %\
+				(self._bind_variable_name, self._name_changed)
 
 	def __eq__(self, other):
 		return (type(other) is StaticState and
@@ -181,39 +204,132 @@ class StaticState(object):
 			self._name_changed == other._name_changed and
 			self._required_binding == other._required_binding)
 
+class SourceStaticState(StaticState):
+	"""
+	Models the source state of a transition.
+	"""
+
+	def __init__(self, outgoing_transition):
+		self._outgoing_transition = outgoing_transition
+
+	def __repr__(self):
+		return "(%s).input()" % self._outgoing_transition
+
+	def __eq__(self, other):
+		return (type(other) is SourceStaticState and
+			self._outgoing_transition == other._outgoing_transition)
+
+class DestinationStaticState(StaticState):
+	"""
+	Models the destination state of a transition.
+	"""
+
+	def __init__(self, incoming_transition):
+		self._incoming_transition = incoming_transition
+
+	def __repr__(self):
+		return "(%s).result()" % self._incoming_transition
+
+	def __eq__(self, other):
+		return (type(other) is DestinationStaticState and
+			self._incoming_transition == other._incoming_transition)
+
+class StateValue(object):
+	"""
+	Models the value to which some state maps a program variable.
+	"""
+
+	def __init__(self, state, name):
+		self._state = state
+		self._name = name
+
+	def _in(self, interval):
+		"""
+		Generates an atom.
+		"""
+		return formula_tree.StateValueInInterval(
+			self._state,
+			self._name,
+			interval
+		)
+
+	def equals(self, value):
+		"""
+		Generates an atom.
+		"""
+		return formula_tree.StateValueEqualTo(
+			self._state,
+			self._name,
+			value
+		)
+
+	def length(self):
+		return formula_tree.StateValueLength(self)
+
+
 class StaticStateLength(object):
 	"""
-	Models the length being measured of a value given by a state from a QD.
+	Models the length being measured of a value given by a state.
 	"""
 
 	def __init__(self, static_state):
 		self._static_state = static_state
 
 	def _in(self, interval):
-		return formula_tree.StateValueLengthInInterval(self, self._static_state._name, interval)
+		"""
+		Generates an atom.
+		"""
+		return formula_tree.StateValueLengthInInterval(
+			self,
+			self._static_state._name,
+			interval
+		)
 
 
 class StaticTransition(object):
 	"""
-	Models a binding obtained from a QD consisting of transitions.
+	Models transition that occurs during a program's runtime.
 	"""
 
-	def __init__(self, bind_variable_name, operates_on, uses=None):
+	def __init__(self, bind_variable_name, operates_on, uses=None, record=None):
 		self._bind_variable_name = bind_variable_name
 		self._operates_on = operates_on
 		self._required_binding = uses
+		self._record = record
 
 	def duration(self):
 		return Duration(self)
 
-	def _next_transition(self, operates_on):
-		return NextStaticTransition(self, operates_on)
+	def next_call(self, function, record=None):
+		"""
+		record will only matter for the final instrumentation points if there is nesting.
+		It is a list of variable values to record at the start of the next call to function.
+		"""
+		return NextStaticTransition(self, function, record=record)
+
+	def input(self):
+		return SourceStaticState(self)
+
+	def result(self):
+		return DestinationStaticState(self)
 
 	def __repr__(self):
 		if self._required_binding:
-			return "%s = StaticTransition(operates_on=%s, uses=%s)" % (self._bind_variable_name, self._operates_on, self._required_binding)
+			if self._record:
+				return "%s = StaticTransition(operates_on=%s, uses=%s, record=%s)" %\
+					(self._bind_variable_name, self._operates_on,
+						self._required_binding, str(self._record))
+			else:
+				return "%s = StaticTransition(operates_on=%s, uses=%s)" %\
+					(self._bind_variable_name, self._operates_on,
+						self._required_binding)
 		else:
-			return "%s = StaticTransition(operates_on=%s)" % (self._bind_variable_name, self._operates_on)
+			if self._record:
+				return "%s = StaticTransition(operates_on=%s, record=%s)" %\
+					(self._bind_variable_name, self._operates_on, str(self._record))
+			else:
+				return "%s = StaticTransition(operates_on=%s)" %\
+					(self._bind_variable_name, self._operates_on)
 
 	def __eq__(self, other):
 		return (type(other) is StaticTransition and
@@ -226,12 +342,17 @@ class NextStaticTransition(StaticTransition):
 	Models a next transition obtained from another static object.
 	"""
 
-	def __init__(self, static_object, operates_on):
+	def __init__(self, static_object, operates_on, record=None):
 		self._centre = static_object
 		self._operates_on = operates_on
+		self._record = record
 
 	def __repr__(self):
-		return "next_transition(%s, %s)" % (str(self._centre), self._operates_on)
+		if self._record:
+			return "(%s).next_call(%s, record=%s)" %\
+				(str(self._centre), self._operates_on, str(self._record))
+		else:
+			return "(%s).next_call(%s)" % (str(self._centre), self._operates_on)
 
 	def __eq__(self, other):
 		return (type(other) is NextStaticTransition and
@@ -248,54 +369,66 @@ class Duration(object):
 		self._transition = transition
 
 	def _in(self, interval):
+		"""
+		Generates an atom.
+		"""
 		if type(interval) is list:
-			return formula_tree.TransitionDurationInInterval(self._transition, interval)
+			return formula_tree.TransitionDurationInInterval(
+				self._transition,
+				interval
+			)
 		elif type(interval) is tuple:
-			return formula_tree.TransitionDurationInOpenInterval(self._transition, interval)
+			return formula_tree.TransitionDurationInOpenInterval(
+				self._transition,
+				interval
+			)
 		else:
 			raise Exception("Duration predicate wasn't defined properly.")
-
-class RuntimeState(object):
-	"""
-	Models a state obtained by observing data at runtime.
-	"""
-
-	def __init__(self, binding):
-		self._binding = binding
-
-	def __repr__(self):
-		return "RuntimeState(_binding=%s)" % self._binding
-
-class RuntimeTransition(object):
-	"""
-	Models a transition observed by observing data at runtime.
-	"""
-
-	def __init__(self, operates_on, duration):
-		self._operates_on = operates_on
-		self._duration = duration
-
-	def __repr__(self):
-		return "RuntimeTransition(_operates_on=%s, _duration=%s)" % (self._operates_on, self._duration)
 
 def derive_composition_sequence(atom):
 	"""
 	Given an atom, derive the sequence of operator compositions.
+	TODO: support nesting with things other than NextStaticTransition
 	"""
-	sequence = [atom]
-	if type(atom) is formula_tree.TransitionDurationInInterval:
-		current_operator = atom._transition
-	elif type(atom) is formula_tree.StateValueEqualTo:
-		sequence.append(atom._state)
-		return sequence
-	elif type(atom) is formula_tree.StateValueInInterval:
-		sequence.append(atom._state)
-		return sequence
+	"""sequence = [atom]
+	print(atom)
 
 	while type(current_operator) is NextStaticTransition:
 		sequence.append(current_operator)
-		current_operator = current_operator._centre
+		current_operator = current_operator._centre"""
+
+	sequence = [atom]
+	current_operator = atom
+
+	if type(atom) is formula_tree.TransitionDurationInInterval:
+		current_operator = atom._transition
+	elif type(atom) is formula_tree.StateValueEqualTo:
+		current_operator = atom._state
+	elif type(atom) is formula_tree.StateValueInInterval:
+		current_operator = atom._state
+	elif type(atom) is formula_tree.ValueGivenByState:
+		current_operator = atom._state
+
+	while not(type(current_operator) in [StaticState, StaticTransition]):
+		sequence.append(current_operator)
+		if type(current_operator) is SourceStaticState:
+			current_operator = current_operator._outgoing_transition
+		elif type(current_operator) is DestinationStaticState:
+			current_operator = current_operator._incoming_transition
+		elif type(current_operator) is NextStaticTransition:
+			current_operator = current_operator._centre
+
 
 	# add the input bind variable to the composition sequence
 	sequence.append(current_operator)
 	return sequence
+
+def get_base_variable(atom):
+	"""
+	Given an atom, find the StaticState or StaticTransition from which it is derived.
+	"""
+
+	composition_sequence = derive_composition_sequence(atom)
+	variable = composition_sequence[-1]
+
+	return variable

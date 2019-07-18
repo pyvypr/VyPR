@@ -31,11 +31,12 @@ VERDICT_SERVER_URL = None
 VERBOSE = False
 EXPLANATION = False
 DRAW_GRAPHS = False
+VERIFICATION_HOME_MODULE = None
 
-def print(*s):
+"""def print(*s):
 	global VERBOSE
 	if VERBOSE:
-		__builtins__.print(*s)
+		__builtins__.print(*s)"""
 
 def scfg_to_tree(root):
 	"""
@@ -229,6 +230,8 @@ if __name__ == "__main__":
 	VERDICT_SERVER_URL = inst_configuration.get("verdict_server_url")\
 		if inst_configuration.get("verdict_server_url") else "http://localhost:9001/"
 	EXPLANATION = inst_configuration.get("explanation") == "on"
+	VERIFICATION_HOME_MODULE = inst_configuration.get("verification_home_module")\
+                if inst_configuration.get("verification_home_module") else "app"
 
 	# reset code to non-instrumented
 	for directory in os.walk("."):
@@ -256,7 +259,6 @@ if __name__ == "__main__":
 	# for each verified function, find the file in which it is defined
 
 	verification_instruction = "verification.send_event"
-	#verification_instruction = "print"
 
 	for module in verified_modules:
 
@@ -272,7 +274,7 @@ if __name__ == "__main__":
 		asts = ast.parse(code)
 
 		# add necessary imports for instruments to work
-		import_code = "from app import verification; import flask"
+		import_code = "from %s import verification; import flask" % VERIFICATION_HOME_MODULE
 		import_asts = ast.parse(import_code)
 
 		verification_import = import_asts.body[0]
@@ -298,7 +300,6 @@ if __name__ == "__main__":
 			index_to_hash = []
 			
 			qualifier_subsequence = get_qualifier_subsequence(function)
-			#qualifier_string = ".".join(qualifier_subsequence)
 			function_name = function.split(".")
 
 			# find the function definition
@@ -378,10 +379,8 @@ if __name__ == "__main__":
 
 				# using these bindings, we now need to instrument the code
 				# and then store the (bind space index, bind var index, atom index)
-				# -> instrumentation set map in the intermediate relational database
 				# so the instrumentation mappings can be recovered at runtime without recomputation
 
-				potential_free_variables = {}
 				static_qd_to_point_map = {}
 				vertices_to_triple_list = {}
 
@@ -431,198 +430,265 @@ if __name__ == "__main__":
 
 					static_qd_to_point_map[m] = {}
 
-					print("setting up potential free variables for binding %i" % m)
-					potential_free_variables[m] = {}
+					"""
+					TODO: instrumentation will change a bit if we want to implement atoms derived from multiple variables.
+					The change may include removing the grouping by bind variables, since we don't really need this...
+					"""
 
-					for atom in atoms:
+					# iterate through bind variables
+					for (variable_index, bind_variable) in enumerate(formula_structure._bind_variables):
 
-						composition_sequence = derive_composition_sequence(atom)
+						static_qd_to_point_map[m][variable_index] = {}
 
-						print("COMPOSITION SEQUENCE FOR ATOM %s IS %s" % (atom, composition_sequence))
+						# iterate through atoms derived from the current bind variable
+						for (atom_index, atom) in enumerate(filter(lambda atom : get_base_variable(atom) == bind_variable, atoms)):
 
-						input_bind_variable = composition_sequence[-1]
+							composition_sequence = derive_composition_sequence(atom)
+							print("COMPOSITION SEQUENCE FOR ATOM %s IS %s" % (atom, composition_sequence))
+							input_bind_variable = composition_sequence[-1]
+							value_from_binding = element[variable_index]
 
-						position_in_quant_sequence = formula_structure._bind_variables.index(input_bind_variable)
-						value_from_binding = element[position_in_quant_sequence]
+							# the first element tells us how to instrument (variable value, function call duration, etc)
+							# the final element tells us the bind variable to navigate from
+							# the intermediate elements tell us what to look for in the control flow graph, starting from
+							# the bind variable
+							moves = list(reversed(composition_sequence[1:-1]))
 
-						# the first element tells us how to instrument (variable value, function call duration, etc)
-						# the final element tells us the bind variable to navigate from
-						# the intermediate elements tell us what to look for in the control flow graph, starting from
-						# the bind variable
-						moves = list(reversed(composition_sequence[1:-1]))
+							# iterate through the moves we have to make,
+							# using the type of the operator used in the move to compute the points we have to instrument
+							# we set the default set to include just the current binding
+							# for the case where no transformation happens
+							instrumentation_points = [value_from_binding]
+							# currently only works for a single move
+							# for multiple moves we need to apply the transformation to each "previous" instrumentation point
+							"""
+							At the moment, this code is wrong - it's supposed to take as input the previous round of results,
+							but always take the first round - needs to be changed.
+							Will do when I consider nested future time operators.
+							"""
+							for move in moves:
+								if type(move) is NextStaticTransition:
+									calls = []
+									if type(value_from_binding) is CFGVertex:
+										scfg.next_calls(value_from_binding, move._operates_on, calls, marked_vertices=[])
+									elif type(value_from_binding) is CFGEdge:
+										scfg.next_calls(value_from_binding._target_state, move._operates_on, calls, marked_vertices=[])
+									instrumentation_points = calls
+								elif type(move) is SourceStaticState:
+									instrumentation_points = [value_from_binding]
+								elif type(move) is DestinationStaticState:
+									instrumentation_points = [value_from_binding]
 
-						print(moves)
+							print(instrumentation_points)
 
-						# iterate through the moves we have to make,
-						# using the type of the operator used in the move to compute the points we have to instrument
-						# we set the default set to include just the current binding
-						# for the case where no transformation happens
-						instrumentation_points = [value_from_binding]
-						# currently only works for a single move
-						# for multiple moves we need to apply the transformation to each "previous" instrumentation point
-						"""
-						At the moment, this code is wrong - it's supposed to take as input the previous round of results,
-						but always take the first round - needs to be changed.
-						Will do when I consider nested future time operators.
-						"""
-						for move in moves:
-							if type(move) is NextStaticTransition:
-								calls = []
-								if type(value_from_binding) is CFGVertex:
-									scfg.next_calls(value_from_binding, move._operates_on, calls, marked_vertices=[])
-								elif type(value_from_binding) is CFGEdge:
-									scfg.next_calls(value_from_binding._target_state, move._operates_on, calls, marked_vertices=[])
-								instrumentation_points = calls
+							static_qd_to_point_map[m][variable_index][atom_index] = instrumentation_points
 
-						print(instrumentation_points)
+				# now, perform the instrumentation
 
-						# add the pair consisting of the instrumentation points and the original atom
-						#  to the point in the map identified by (static binding, index in static binding)
-						if static_qd_to_point_map[m].get(position_in_quant_sequence):
-							static_qd_to_point_map[m][position_in_quant_sequence].append((instrumentation_points, atom))
-						else:
-							static_qd_to_point_map[m][position_in_quant_sequence] = [(instrumentation_points, atom)]
+				# first step is to add triggers
 
-						static_qd_to_point_map[m][position_in_quant_sequence].append(([value_from_binding], "trigger"))
-
-					# now, perform the instrumentation
-					# iterate through the bind variables - for each bind variable, instrument its points.
+				for (m, element) in enumerate(bindings):
 
 					for bind_variable_index in static_qd_to_point_map[m].keys():
-						potential_free_variables[m][bind_variable_index] = {}
-						for (atom_index, point_atom_pair) in enumerate(static_qd_to_point_map[m][bind_variable_index]):
-							print("instrumenting for", atom_index, point_atom_pair)
-							points = point_atom_pair[0]
-							atom = point_atom_pair[1]
-							# atom_index is wrt partitions based on variables,
 
-							if atom == "trigger":
-								# we must instrument this as a trigger point
-								print("instrumenting a trigger point")
-								point = points[0]
+						print("adding trigger for static binding/bind variable %i/%i" % (m, bind_variable_index))
 
-								# this instrument only needs to reset the minimality flag for the correct partition set
-								# the binding space index combined with the bind variable index are enough for that
-								instrument = "%s((\"%s\", \"trigger\", \"%s\", %i, %i))" %\
-									(verification_instruction, formula_hash, instrument_function_qualifier, m, bind_variable_index)
+						point = element[bind_variable_index]
 
-								instrument_ast = ast.parse(instrument).body[0]
-								if type(point) is CFGVertex:
-									instruction = point._previous_edge._instruction
-								else:
-									instruction = point._instruction
+						instrument = "%s((\"%s\", \"trigger\", \"%s\", %i, %i))" %\
+							(verification_instruction, formula_hash, instrument_function_qualifier, m, bind_variable_index)
 
-								lineno = instruction.lineno
-								col_offset = instruction.col_offset
+						instrument_ast = ast.parse(instrument).body[0]
+						if type(point) is CFGVertex:
+							instruction = point._previous_edge._instruction
+						else:
+							instruction = point._instruction
 
-								index_in_block = instruction._parent_body.index(instruction)
+						lineno = instruction.lineno
+						col_offset = instruction.col_offset
 
-								instruction._parent_body.insert(index_in_block+1, instrument_ast)
+						index_in_block = instruction._parent_body.index(instruction)
 
+						# insert triggers before the things that will be measured
+						instruction._parent_body.insert(index_in_block, instrument_ast)
+
+
+				# we then invert the map we constructed from triples to instrumentation points so that we can avoid overlap of instruments
+
+				print(static_qd_to_point_map)
+
+				print("inverting instrumentation structure")
+
+				point_to_triples = {}
+
+				for (m, element) in enumerate(bindings):
+					for bind_variable_index in static_qd_to_point_map[m].keys():
+						for atom_index in static_qd_to_point_map[m][bind_variable_index].keys():
+							points = static_qd_to_point_map[m][bind_variable_index][atom_index]
+							for (n, point) in enumerate(points):
+
+								if not(point_to_triples.get(point)):
+									point_to_triples[point] = {}
+
+								atom_index_in_db = atom_index_to_db_index[atom_index]
+								instrumentation_point_dictionary = {
+									"binding" : binding_db_id,
+									"serialised_condition_sequence" : map(pickle.dumps, point._previous_edge._condition if type(point) is CFGVertex else point._condition),
+									"reaching_path_length" : point._path_length if type(point) is CFGVertex else point._target_state._path_length,
+									"atom" : atom_index_to_db_index[atom_index]
+								}
+								print(instrumentation_point_dictionary)
+								serialised_dictionary = json.dumps(instrumentation_point_dictionary)
+								try:
+									instrumentation_point_db_id = int(post_to_verdict_server("store_instrumentation_point/", data=serialised_dictionary))
+								except:
+									print("There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
+									exit()
+
+								if not(point_to_triples[point].get(atom_index)):
+									point_to_triples[point][atom_index] = []
+
+								point_to_triples[point][atom_index].append([m, bind_variable_index, atom_index, n, instrumentation_point_db_id])
+
+				print(point_to_triples)
+				print("placing instruments by iterating through instrumentation points")
+
+				# we now insert the instruments
+
+				for point in point_to_triples.keys():
+					for atom_index in point_to_triples[point].keys():
+						atom = atoms[atom_index]
+						print("placing single instrument at %s for atom %s at index %i" % (point, atom, atom_index))
+						list_of_lists = zip(*point_to_triples[point][atom_index])
+
+						if type(atom) is formula_tree.TransitionDurationInInterval:
+
+							composition_sequence = derive_composition_sequence(atom)
+							composition_sequence = list(reversed(composition_sequence))[:-1]
+
+							if composition_sequence[-1]._record:
+								states = []
+								for var in composition_sequence[-1]._record:
+									states.append("'%s' : %s" % (var, var))
+								state_string = ", ".join(states)
+								state_dict = "{%s}" % state_string
 							else:
-								global_atom_index = atoms.index(atom)
+								state_dict = "{}"
 
-								potential_free_variables[m][bind_variable_index][atom_index] = []
+							timer_start_statement = "__timer_s = datetime.datetime.now()"
+							timer_end_statement = "__timer_e = datetime.datetime.now()"
 
-								for (n, point) in enumerate(points):
+							time_difference_statement = "__duration = __timer_e - __timer_s; "
+							instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, {variable_index}," +\
+								"{global_atom_index}, {instrumentation_set_index}, {instrumentation_point_db_id}, {observed_value}, __thread_id, {state_dict}")\
+								.format(
+									formula_hash = formula_hash,
+									function_qualifier = instrument_function_qualifier,
+									binding_space_index = list_of_lists[0],
+									variable_index = list_of_lists[1],
+									global_atom_index = list_of_lists[2],
+									instrumentation_set_index = list_of_lists[3],
+									instrumentation_point_db_id = list_of_lists[4],
+									observed_value = "__duration",
+									state_dict = state_dict
+								)
+							time_difference_statement += "%s((%s))" % (verification_instruction, instrument_tuple)
 
-									# send the instrumentation point to the verdict server and get its ID in the database
-									atom_index_in_db = atom_index_to_db_index[atom_index]
-									instrumentation_point_dictionary = {
-										"binding" : binding_db_id,
-										"serialised_condition_sequence" : map(pickle.dumps, point._previous_edge._condition if type(point) is CFGVertex else point._condition),
-										"reaching_path_length" : point._path_length if type(point) is CFGVertex else point._target_state._path_length,
-										"atom" : atom_index_to_db_index[atom_index]
-									}
-									print(instrumentation_point_dictionary)
-									serialised_dictionary = json.dumps(instrumentation_point_dictionary)
-									try:
-										instrumentation_point_db_id = int(post_to_verdict_server("store_instrumentation_point/", data=serialised_dictionary))
-									except:
-										print("There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
-										exit()
+							start_ast = ast.parse(timer_start_statement).body[0]
+							end_ast = ast.parse(timer_end_statement).body[0]
+							difference_ast = ast.parse(time_difference_statement).body[0]
+							queue_ast = ast.parse(time_difference_statement).body[1]
 
+							start_ast.lineno = point._instruction.lineno
+							start_ast.col_offset = point._instruction.col_offset
+							end_ast.lineno = point._instruction.lineno
+							end_ast.col_offset = point._instruction.col_offset
+							difference_ast.lineno = point._instruction.lineno
+							difference_ast.col_offset = point._instruction.col_offset
+							queue_ast.lineno = point._instruction.lineno
+							queue_ast.col_offset = point._instruction.col_offset
 
-									if type(atom) is formula_tree.TransitionDurationInInterval:
+							index_in_block = point._instruction._parent_body.index(point._instruction)
 
-										coordinate_triple = "[%i][%i][%i]" % (m, bind_variable_index, atom_index)
+							# insert instruments in reverse order
 
-										timer_start_statement = "__timer_s = datetime.datetime.now()"
-										timer_end_statement = "__timer_e = datetime.datetime.now()"
-										# we put a pair (index in static qd, index in instrumentation points)
-										# this determines the point in the static cfg that will be executed
-										print("point %s has path length %s" % (str(point), str(point._target_state._path_length)))
-										time_difference_statement = ("__duration = __timer_e - __timer_s; %s((\"%s\", \"instrument\", \"%s\", %i, %i, %i, %i, __duration, %i, %i, %s, %i, %i, %i));") %\
-											(verification_instruction, formula_hash, instrument_function_qualifier, m, bind_variable_index,
-												atom_index, n, atoms.index(atom), point._instruction.lineno, map(pickle.dumps, point._condition),
-												point._target_state._path_length, instrumentation_point_db_id, global_atom_index)
+							point._instruction._parent_body.insert(index_in_block+1, queue_ast)
+							point._instruction._parent_body.insert(index_in_block+1, difference_ast)
+							point._instruction._parent_body.insert(index_in_block+1, end_ast)
+							point._instruction._parent_body.insert(index_in_block, start_ast)
 
-										print("Argument specification:")
-										print(
-											dict(
-												[(key, getattr(point._instruction.value, key)) for key in dir(point._instruction.value)]
-											)
-										)
+						elif type(atom) in [formula_tree.StateValueInInterval, formula_tree.StateValueEqualTo, formula_tree.StateValueInOpenInterval]:
 
-										start_ast = ast.parse(timer_start_statement).body[0]
-										end_ast = ast.parse(timer_end_statement).body[0]
-										difference_ast = ast.parse(time_difference_statement).body[0]
-										queue_ast = ast.parse(time_difference_statement).body[1]
+							# we are instrumenting a state, so store the value used in that state
+							# in a new variable by accessing the existing variable
+							# we place code in the edge leading to this vertex, since
+							# that is the edge that contains the code that computes the state
+							# this vertex models.
 
-										start_ast.lineno = point._instruction.lineno
-										start_ast.col_offset = point._instruction.col_offset
-										end_ast.lineno = point._instruction.lineno
-										end_ast.col_offset = point._instruction.col_offset
-										difference_ast.lineno = point._instruction.lineno
-										difference_ast.col_offset = point._instruction.col_offset
-										queue_ast.lineno = point._instruction.lineno
-										queue_ast.col_offset = point._instruction.col_offset
-                                                                                
+							state_variable_alias = atom._name.replace(".", "_").replace("(", "__").replace(")", "__")
+							state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, atom._name)
 
-										index_in_block = point._instruction._parent_body.index(point._instruction)
+							instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, {variable_index}," +\
+								"{global_atom_index}, {instrumentation_set_index}, {instrumentation_point_db_id}, {{ '{atom_program_variable}' : {observed_value} }}, __thread_id")\
+								.format(
+									formula_hash = formula_hash,
+									function_qualifier = instrument_function_qualifier,
+									binding_space_index = list_of_lists[0],
+									variable_index = list_of_lists[1],
+									global_atom_index = list_of_lists[2],
+									instrumentation_set_index = list_of_lists[3],
+									instrumentation_point_db_id = list_of_lists[4],
+									atom_program_variable = atom._name,
+									observed_value = ("record_state_%s" % state_variable_alias)
+								)
+							state_recording_instrument += "%s((%s))" % (verification_instruction, instrument_tuple)
 
-										# insert instruments in reverse order
+							record_state_ast = ast.parse(state_recording_instrument).body[0]
+							queue_ast = ast.parse(state_recording_instrument).body[1]
 
-										point._instruction._parent_body.insert(index_in_block+1, queue_ast)
-										# the split instruction should be between the difference computation, and before the queue insertion
-										#point._instruction._parent_body.insert(index_in_block+1, split_ast)
-										point._instruction._parent_body.insert(index_in_block+1, difference_ast)
-										point._instruction._parent_body.insert(index_in_block+1, end_ast)
-										point._instruction._parent_body.insert(index_in_block, start_ast)
+							if type(atom._state) is SourceStaticState or type(atom._state) is DestinationStaticState:
+								# if the state we're measuring a property of is derived from a source operator,
+								# then the instrumentation point we're given is an SCFG edge which contains
+								# an instruction for us to place a state recording instrument before
 
-									elif type(atom) in [formula_tree.StateValueInInterval, formula_tree.StateValueEqualTo, formula_tree.StateValueInOpenInterval]:
+								print("adding state recording instrument for source or target")
 
-										# we are instrumenting a state, so store the value used in that state
-										# in a new variable by accessing the existing variable
-										# we place code in the edge leading to this vertex, since
-										# that is the edge that contains the code that computes the state
-										# this vertex models.
+								parent_block = point._instruction._parent_body
 
-										incident_edge = point._previous_edge
-										parent_block = incident_edge._instruction._parent_body
+								record_state_ast.lineno = point._instruction.lineno
+								record_state_ast.col_offset = point._instruction.col_offset
+								queue_ast.lineno = point._instruction.lineno
+								queue_ast.col_offset = point._instruction.col_offset
 
-										# need to adjust this to record the entire state! <- possibly infeasible
-										# we don't need to record the entire state since we record only what the atom needs to observe
-										state_variable_alias = atom._name.replace(".", "_").replace("(", "__").replace(")", "__")
-										record_state = ("record_state_%s = %s; %s((\"%s\", \"instrument\", \"%s\", %i, %i, %i, %i, {'%s' : record_state_%s}, %i, %i, %i, %i));") %\
-											(state_variable_alias, atom._name, verification_instruction, formula_hash, instrument_function_qualifier, m,
-												bind_variable_index, atom_index, n, atom._name, state_variable_alias, atoms.index(atom),
-												incident_edge._instruction.lineno, instrumentation_point_db_id, global_atom_index)
+								index_in_block = parent_block.index(point._instruction)
 
-										record_state_ast = ast.parse(record_state).body[0]
-										queue_ast = ast.parse(record_state).body[1]
+								if type(atom._state) is SourceStaticState:
+									# for source state recording, we record the state, but only insert its value after
+									# this is so triggers can be inserted before normal instruments without introducing
+									# a special case for trigger insertion
+									parent_block.insert(index_in_block, queue_ast)
+									parent_block.insert(index_in_block, record_state_ast)
+								elif type(atom._state) is DestinationStaticState:
+									parent_block.insert(index_in_block+1, queue_ast)
+									parent_block.insert(index_in_block+1, record_state_ast)
+							else:
 
-										record_state_ast.lineno = incident_edge._instruction.lineno
-										record_state_ast.col_offset = incident_edge._instruction.col_offset
-										queue_ast.lineno = incident_edge._instruction.lineno
-										queue_ast.col_offset = incident_edge._instruction.col_offset
+								print("not source or destination state - performing normal instrumentation")
+								print(point)
+								incident_edge = point._previous_edge
+								parent_block = incident_edge._instruction._parent_body
 
-										index_in_block = parent_block.index(incident_edge._instruction)
+								record_state_ast.lineno = incident_edge._instruction.lineno
+								record_state_ast.col_offset = incident_edge._instruction.col_offset
+								queue_ast.lineno = incident_edge._instruction.lineno
+								queue_ast.col_offset = incident_edge._instruction.col_offset
 
-										# insert instruments in reverse order
+								index_in_block = parent_block.index(incident_edge._instruction)
 
-										parent_block.insert(index_in_block+1, queue_ast)
-										parent_block.insert(index_in_block+1, record_state_ast)
+								# insert instruments in reverse order
+
+								parent_block.insert(index_in_block+1, queue_ast)
+								parent_block.insert(index_in_block+1, record_state_ast)
 
 				if EXPLANATION:
 					# if explanation was turned on in the configuration file, insert path instruments.
@@ -737,19 +803,28 @@ if __name__ == "__main__":
 	
 				# NOTE: only problem with this is that the "end" instrument is inserted before the return,
 				# so a function call in the return statement maybe missed if it's part of verification...
-				start_instrument = "%s((\"%s\", \"function\", \"%s\", \"start\", flask.g.request_time, \"%s\"))"\
+				thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
+				start_instrument = "%s((\"%s\", \"function\", \"%s\", \"start\", flask.g.request_time, \"%s\", __thread_id))"\
 							% (verification_instruction, formula_hash, instrument_function_qualifier, formula_hash)
 
+				threading_import_ast = ast.parse(thread_id_capture).body[0]
+				thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
 				start_ast = ast.parse(start_instrument).body[0]
 	
+				threading_import_ast.lineno = function_def.body[0].lineno
+				threading_import_ast.col_offset = function_def.body[0].col_offset
+				thread_id_capture_ast.lineno = function_def.body[0].lineno
+				thread_id_capture_ast.col_offset = function_def.body[0].col_offset
 				start_ast.lineno = function_def.body[0].lineno
 				start_ast.col_offset = function_def.body[0].col_offset
 	
 				function_def.body.insert(0, start_ast)
+				function_def.body.insert(0, thread_id_capture_ast)
+				function_def.body.insert(0, threading_import_ast)
 							
 				# insert the end instrument before every return statement
 				for end_vertex in scfg.return_statements:
-					end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\"))"\
+					end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id))"\
 										% (verification_instruction, formula_hash, instrument_function_qualifier, formula_hash)
 					end_ast = ast.parse(end_instrument).body[0]
 

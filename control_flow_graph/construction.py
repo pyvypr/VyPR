@@ -1,6 +1,6 @@
 from __future__ import print_function
-def print(*s):
-	pass
+"""def print(*s):
+	pass"""
 """
 (C) Copyright 2018 CERN and University of Manchester.
 This software is distributed under the terms of the GNU General Public Licence version 3 (GPL Version 3), copied verbatim in the file "COPYING".
@@ -163,7 +163,10 @@ class CFGEdge(object):
 	"""
 
 	def __init__(self, condition, instruction=None, input_variables=[]):
-		self._condition = condition
+		# the condition has to be copied, otherwise later additions to the condition on the same branch
+		# for example, to indicate divergence and convergence of control flow
+		# will also be reflected in conditions earlier in the branch
+		self._condition = [c for c in condition] if type(condition) is list else condition
 		self._instruction = instruction
 		self._source_state = None
 		self._target_state = None
@@ -257,15 +260,6 @@ class CFG(object):
 
 				# update current vertices
 				current_vertices = [new_vertex]
-
-				"""if type(entry) is ast.Assign:
-					# if any inherited variables are overwritten, remove them from the inherited list
-					try:
-						if entry.targets[0].id in input_variables_copy:
-							input_variables_copy = [s for s in input_variables_copy if not(s == entry.targets[0].id)]
-					except:
-						print("assignment was non-trivial - leaving processing")
-						traceback.print_exc()"""
 
 			if type(entry) is ast.Pass:
 				path_length += 1
@@ -461,6 +455,7 @@ class CFG(object):
 				#condition_copy = [c for c in condition]
 				#condition_copy.append(disjunction_for_after_branch)
 				#condition = condition_copy
+				condition.append("skip-conditional")
 
 				# reset path length for instructions after conditional
 				path_length = 0
@@ -544,6 +539,7 @@ class CFG(object):
 				else:
 					empty_conditional_vertex.post_try_catch_vertex = None
 
+				condition.append("skip-try-catch")
 				path_length = 0
 
 			elif type(entry) is ast.For:
@@ -605,6 +601,8 @@ class CFG(object):
 
 				current_vertices = [empty_post_loop_vertex]
 				#current_vertices = final_vertices
+
+				condition.append("skip-for-loop")
 
 				# reset path length for instructions after loop
 				path_length = 0
