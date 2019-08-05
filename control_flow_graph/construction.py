@@ -112,13 +112,14 @@ class CFGVertex(object):
 	a name is mapped in Python code is changed.
 	"""
 
-	def __init__(self, entry=None, path_length=None):
+	def __init__(self, entry=None, path_length=None, structure_obj=None):
 		"""
 		Given the name changed in the state this vertex represents,
 		store it.
 		Vertices can also have multiple edges leading out of them into next states.
 		"""
 		self._path_length = path_length
+		self._structure_obj = structure_obj
 		if not(entry):
 			self._name_changed = []
 		else:
@@ -393,7 +394,7 @@ class CFG(object):
 						break
 
 				# insert intermediate control flow vertex at the beginning of the block
-				empty_conditional_vertex = CFGVertex()
+				empty_conditional_vertex = CFGVertex(structure_obj=entry)
 				empty_conditional_vertex._name_changed = ['conditional']
 				self.vertices.append(empty_conditional_vertex)
 				for vertex in current_vertices:
