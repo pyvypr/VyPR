@@ -441,7 +441,9 @@ if __name__ == "__main__":
 						static_qd_to_point_map[m][variable_index] = {}
 
 						# iterate through atoms derived from the current bind variable
-						for (atom_index, atom) in enumerate(filter(lambda atom : get_base_variable(atom) == bind_variable, atoms)):
+						for atom in filter(lambda atom : get_base_variable(atom) == bind_variable, atoms):
+
+							atom_index = atoms.index(atom)
 
 							composition_sequence = derive_composition_sequence(atom)
 							print("COMPOSITION SEQUENCE FOR ATOM %s IS %s" % (atom, composition_sequence))
@@ -556,6 +558,7 @@ if __name__ == "__main__":
 				# we now insert the instruments
 
 				for point in point_to_triples.keys():
+					print("placing instruments for point %s" % point)
 					for atom_index in point_to_triples[point].keys():
 						atom = atoms[atom_index]
 						print("placing single instrument at %s for atom %s at index %i" % (point, atom, atom_index))
@@ -674,7 +677,7 @@ if __name__ == "__main__":
 							else:
 
 								print("not source or destination state - performing normal instrumentation")
-								print(point)
+								print(point, atom)
 								incident_edge = point._previous_edge
 								parent_block = incident_edge._instruction._parent_body
 
