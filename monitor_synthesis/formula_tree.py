@@ -39,7 +39,7 @@ class StateValueInInterval(Atom):
 		self.verdict = None
 
 	def __repr__(self):
-		return "(%s)(%s) in %s" % (self._state, self._interval)
+		return "(%s)(%s) in %s" % (self._state, self._name, self._interval)
 
 	def __eq__(self, other_atom):
 		if type(other_atom) is StateValueInInterval:

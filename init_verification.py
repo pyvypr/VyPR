@@ -203,38 +203,47 @@ def consumption_thread_function(verification_obj):
 				print("processing existing monitors")
 				# we look at the monitors' timestamps, and decide whether to generate a new monitor
 				# and copy over existing information, or update timestamps of existing monitors
-				for (n, monitor) in enumerate(static_qd_to_monitors[static_qd_index]):
+				new_monitors = []
+				subsequences_processed = []
+				for monitor in static_qd_to_monitors[static_qd_index]:
 					# check if the monitor's timestamp sequence includes a timestamp for this bind variable
 					print("  processing monitor with timestamp sequence %s" % str(monitor._monitor_instantiation_time))
 					if len(monitor._monitor_instantiation_time) == bind_variable_index+1:
-						print("    instantiating new monitor with modified timestamp sequence")
-						# instantiate a new monitor using the timestamp subsequence excluding the current bind variable
-						# and copy over all observation, path and state information
+						if monitor._monitor_instantiation_time[:bind_variable_index] in subsequences_processed:
+							# the same subsequence might have been copied and extended multiple times
+							# we only care about one
+							continue
+						else:
+							subsequences_processed.append(monitor._monitor_instantiation_time[:bind_variable_index])
+							# construct new monitor
+							print("    instantiating new monitor with modified timestamp sequence")
+							# instantiate a new monitor using the timestamp subsequence excluding the current bind variable
+							# and copy over all observation, path and state information
 
-						old_instantiation_time = list(monitor._monitor_instantiation_time)
-						updated_instantiation_time = tuple(old_instantiation_time[:bind_variable_index] + [datetime.datetime.now()])
-						new_monitor = formula_tree.new_monitor(formula_structure.get_formula_instance())
-						try:
-							static_qd_to_monitors[static_qd_index].append(new_monitor)
-						except:
-							static_qd_to_monitors[static_qd_index] = [new_monitor]
+							old_instantiation_time = list(monitor._monitor_instantiation_time)
+							updated_instantiation_time = tuple(old_instantiation_time[:bind_variable_index] + [datetime.datetime.now()])
+							new_monitor = formula_tree.new_monitor(formula_structure.get_formula_instance())
+							new_monitors.append(new_monitor)
 
-						# copy timestamp sequence, observation, path and state information
-						new_monitor._monitor_instantiation_time = updated_instantiation_time
+							# copy timestamp sequence, observation, path and state information
+							new_monitor._monitor_instantiation_time = updated_instantiation_time
 
-						# iterate through the observations stored by the previous monitor
-						# for bind variables before the current one and use them to update the new monitor
-						for atom in monitor._state:
-							if (formula_structure.get_formula_instance()._bind_variables.index(get_base_variable(atom)) < bind_variable_index
-								and not(monitor._state[atom] is None)):
-								if monitor._state[atom] == True:
-									new_monitor.check_optimised(atom)
-								elif monitor._state[atom] == False:
-									new_monitor.check_optimised(formula_tree.lnot(atom))
+							# iterate through the observations stored by the previous monitor
+							# for bind variables before the current one and use them to update the new monitor
+							for atom in monitor._state._state:
+								if not(type(atom) is formula_tree.LogicalNot):
+									if (formula_structure._bind_variables.index(get_base_variable(atom)) < bind_variable_index
+										and not(monitor._state._state[atom] is None)):
+										if monitor._state._state[atom] == True:
+											new_monitor.check_optimised(atom)
+										elif monitor._state._state[atom] == False:
+											new_monitor.check_optimised(formula_tree.lnot(atom))
 
-								new_monitor.atom_to_observation[atom] = monitor.atom_to_observation[atom]
-								new_monitor.atom_to_program_path[atom] = monitor.atom_to_program_path[atom]
-								new_monitor.atom_to_state_dict[atom] = monitor.atom_to_state_dict[atom]
+										atom_index = atoms.index(atom)
+
+										new_monitor.atom_to_observation[atom_index] = monitor.atom_to_observation[atom_index]
+										new_monitor.atom_to_program_path[atom_index] = monitor.atom_to_program_path[atom_index]
+										new_monitor.atom_to_state_dict[atom_index] = monitor.atom_to_state_dict[atom_index]
 
 					elif len(monitor._monitor_instantiation_time) == bind_variable_index:
 						print("    updating existing monitor timestamp sequence")
@@ -242,6 +251,9 @@ def consumption_thread_function(verification_obj):
 						tmp_sequence = list(monitor._monitor_instantiation_time)
 						tmp_sequence.append(datetime.datetime.now())
 						monitor._monitor_instantiation_time = tuple(tmp_sequence)
+
+				# add the new monitors
+				static_qd_to_monitors[static_qd_index] += new_monitors
 
 		if instrument_type == "path":
 			# we've received a path recording instrument

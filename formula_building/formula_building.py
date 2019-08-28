@@ -399,17 +399,26 @@ def derive_composition_sequence(atom):
 		sequence.append(current_operator)
 		current_operator = current_operator._centre"""
 
-	sequence = [atom]
-	current_operator = atom
+	print("deriving composition sequence for atom %s" % atom)
 
-	if type(atom) is formula_tree.TransitionDurationInInterval:
-		current_operator = atom._transition
-	elif type(atom) is formula_tree.StateValueEqualTo:
-		current_operator = atom._state
-	elif type(atom) is formula_tree.StateValueInInterval:
-		current_operator = atom._state
-	elif type(atom) is formula_tree.ValueGivenByState:
-		current_operator = atom._state
+	sequence = [atom]
+	if type(atom) == formula_tree.LogicalNot:
+		print("detected negation - removing")
+		current_operator = atom.operand
+	else:
+		current_operator = atom
+
+	# for now, a horrible trick
+	#import monitor_synthesis
+
+	if type(current_operator) == formula_tree.TransitionDurationInInterval:
+		current_operator = current_operator._transition
+	elif type(current_operator) == formula_tree.StateValueEqualTo:
+		current_operator = current_operator._state
+	elif type(current_operator) == formula_tree.StateValueInInterval:
+		current_operator = current_operator._state
+	"""elif type(atom) is formula_tree.ValueGivenByState:
+		current_operator = atom._state"""
 
 	while not(type(current_operator) in [StaticState, StaticTransition]):
 		sequence.append(current_operator)
@@ -423,6 +432,9 @@ def derive_composition_sequence(atom):
 
 	# add the input bind variable to the composition sequence
 	sequence.append(current_operator)
+
+	print("final composition sequence is %s" % str(sequence))
+
 	return sequence
 
 def get_base_variable(atom):
