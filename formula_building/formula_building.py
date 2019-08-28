@@ -150,14 +150,16 @@ class calls(object):
 	Syntactic sugar for specifications.
 	"""
 
-	def __init__(self, operates_on, after=None):
+	def __init__(self, operates_on, after=None, record=None):
 		self._operates_on = operates_on
 		self._required_binding = after
+		self._record = record
 
 	def complete_instantiation(self, bind_variable_name):
 		return StaticTransition(
 			bind_variable_name,
-			self._operates_on, self._required_binding
+			self._operates_on, self._required_binding,
+			self._record
 		)
 
 """
