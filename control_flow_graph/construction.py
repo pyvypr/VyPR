@@ -1,5 +1,5 @@
 from __future__ import print_function
-"""def print(*s):
+"""def #print(*s):
 	pass"""
 """
 (C) Copyright 2018 CERN and University of Manchester.
@@ -39,7 +39,7 @@ def get_function_name_strings(obj):
 	"""
 	chain = list(ast.walk(obj))
 	all_calls = filter(lambda item : type(item) is ast.Call, chain)
-	#print(all_calls)
+	##print(all_calls)
 	full_names = {}
 	for call in all_calls:
 		# construct the full function name for this call
@@ -112,13 +112,14 @@ class CFGVertex(object):
 	a name is mapped in Python code is changed.
 	"""
 
-	def __init__(self, entry=None, path_length=None):
+	def __init__(self, entry=None, path_length=None, structure_obj=None):
 		"""
 		Given the name changed in the state this vertex represents,
 		store it.
 		Vertices can also have multiple edges leading out of them into next states.
 		"""
 		self._path_length = path_length
+		self._structure_obj = structure_obj
 		if not(entry):
 			self._name_changed = []
 		else:
@@ -178,9 +179,9 @@ class CFGEdge(object):
 				self._operates_on = map(get_attr_name_string, self._instruction.targets[0].elts) + get_function_name_strings(self._instruction.value)
 			else:
 				self._operates_on = [get_attr_name_string(self._instruction.targets[0])] + get_function_name_strings(self._instruction.value)
-			print(self._operates_on)
+			#print(self._operates_on)
 		elif type(self._instruction) is ast.Assign and not(type(self._instruction.value) is ast.Call):
-			print("constructed string: ", get_attr_name_string(self._instruction.targets[0]))
+			#print("constructed string: ", get_attr_name_string(self._instruction.targets[0]))
 			self._operates_on = get_attr_name_string(self._instruction.targets[0])
 		elif type(self._instruction) is ast.Expr and hasattr(self._instruction.value, "func"):
 			self._operates_on = get_function_name_strings(self._instruction.value)
@@ -232,10 +233,10 @@ class CFG(object):
 		path_length = 0
 
 		for (n, entry) in enumerate(block):
-			print("processing block")
+			#print("processing block")
 			if type(entry) is ast.Assign or (type(entry) is ast.Expr and type(entry.value) is ast.Call):
 				path_length += 1
-				print("processing assignment")
+				#print("processing assignment")
 
 				#condition_to_use = condition if n == 0 else []
 
@@ -243,7 +244,7 @@ class CFG(object):
 				new_edges = []
 				for vertex in current_vertices:
 					entry._parent_body = block
-					print("constructing new edge")
+					#print("constructing new edge")
 					new_edge = CFGEdge(condition, entry, input_variables=input_variables_copy)
 					new_edges.append(new_edge)
 					vertex.add_outgoing_edge(new_edge)
@@ -269,7 +270,7 @@ class CFG(object):
 				new_edges = []
 				for vertex in current_vertices:
 					entry._parent_body = block
-					print("constructing new edge")
+					#print("constructing new edge")
 					new_edge = CFGEdge(condition, entry, input_variables=input_variables_copy)
 					new_edges.append(new_edge)
 					vertex.add_outgoing_edge(new_edge)
@@ -363,7 +364,7 @@ class CFG(object):
 
 			elif type(entry) is ast.If:
 				entry._parent_body = block
-				print("Processing conditional at line %i with parent block %s" % (entry.lineno, entry._parent_body))
+				#print("Processing conditional at line %i with parent block %s" % (entry.lineno, entry._parent_body))
 				path_length += 1
 
 				if entry != entry._parent_body[-1]:
@@ -393,7 +394,7 @@ class CFG(object):
 						break
 
 				# insert intermediate control flow vertex at the beginning of the block
-				empty_conditional_vertex = CFGVertex()
+				empty_conditional_vertex = CFGVertex(structure_obj=entry)
 				empty_conditional_vertex._name_changed = ['conditional']
 				self.vertices.append(empty_conditional_vertex)
 				for vertex in current_vertices:
@@ -414,7 +415,7 @@ class CFG(object):
 				# the disjunction of formulas that could each have been followed for control flow to continue after the if-statement
 				disjunction_for_after_branch = current_condition_set# + map(formula_tree.lnot, current_condition_set)
 
-				print(final_conditional_vertices)
+				#print(final_conditional_vertices)
 
 				# we include the vertex before the conditional, only if there was no else
 				if not(final_else_is_present):
@@ -422,7 +423,7 @@ class CFG(object):
 				else:
 					current_vertices = final_conditional_vertices
 
-				print(current_vertices)
+				#print(current_vertices)
 
 				# filter out vertices that were returns or raises
 				# here we have to check for the previous edge existing, in case the program starts with a conditional
@@ -463,7 +464,7 @@ class CFG(object):
 			elif type(entry) is ast.TryExcept:
 				entry._parent_body = block
 				path_length += 1
-				print("processing try-except")
+				#print("processing try-except")
 
 				if entry != entry._parent_body[-1]:
 					self.branch_initial_statements.append(["post-try-catch", entry])
@@ -482,17 +483,17 @@ class CFG(object):
 				blocks = []
 				self.branch_initial_statements.append(["try-catch", entry.body[0], "try-catch-main"])
 
-				print("except handling blocks are:")
+				#print("except handling blocks are:")
 
 				for except_handler in entry.handlers:
 					self.branch_initial_statements.append(["try-catch", except_handler.body[0], "try-catch-handler"])
-					print(except_handler.body)
+					#print(except_handler.body)
 					blocks.append(except_handler.body)
 
-				print("final list of except blocks is")
-				print(blocks)
+				#print("final list of except blocks is")
+				#print(blocks)
 
-				print("processing blocks")
+				#print("processing blocks")
 
 				# first process entry.body
 				final_try_catch_vertices = []
@@ -503,15 +504,15 @@ class CFG(object):
 				# now process the except handlers - eventually with some identifier for each branch
 
 				for block_item in blocks:
-					print(block_item)
-					print("="*10)
+					#print(block_item)
+					#print("="*10)
 					final_vertices = self.process_block(block_item, current_vertices, condition + ['try-catch-handler'], input_variables=input_variables_copy)
 					final_try_catch_vertices += final_vertices
-					print("="*10)
+					#print("="*10)
 
 				current_vertices = final_try_catch_vertices
 
-				print(current_vertices)
+				#print(current_vertices)
 
 				# filter out vertices that were returns or raises
 				# this should be applied to the other cases as well - needs testing
@@ -520,8 +521,8 @@ class CFG(object):
 					current_vertices
 				)
 
-				print("processing try-except end statements")
-				print(current_vertices)
+				#print("processing try-except end statements")
+				#print(current_vertices)
 
 				if len(current_vertices) > 0:
 					empty_vertex = CFGVertex()
@@ -632,10 +633,10 @@ class CFG(object):
 		Derive a dictionary mapping vertices to lists of symbol lists.
 		The symbols are either edges (terminal symbols) or vertices (non-terminal symbols).
 		"""
-		print("constructing context free grammar from scfg")
+		#print("constructing context free grammar from scfg")
 		final_map = {}
 		for vertex in self.vertices:
-			print(vertex)
+			#print(vertex)
 			# check for the type of vertex
 			if len(vertex.edges) == 0:
 
@@ -646,7 +647,7 @@ class CFG(object):
 
 				# a normal vertex, but we care about what it leads to since this determines the "special" structure of rules we generate
 
-				print(vertex._name_changed)
+				#print(vertex._name_changed)
 				# we handle conditionals and try-catches together at the moment, because they have similar structure
 				if not(vertex.edges[0]._target_state._name_changed in [["conditional"], ["try-catch"]]):
 
@@ -712,7 +713,7 @@ class CFG(object):
 				else:
 					final_map[vertex] = [[vertex.edges[0], vertex.edges[0]._target_state]]
 
-			print(final_map[vertex])
+			#print(final_map[vertex])
 
 		return final_map
 

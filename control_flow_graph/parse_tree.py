@@ -1,6 +1,6 @@
 from __future__ import print_function
-def print(*s):
-	pass
+"""def print(*s):
+	pass"""
 """
 (C) Copyright 2018 CERN and University of Manchester.
 This software is distributed under the terms of the GNU General Public Licence version 3 (GPL Version 3), copied verbatim in the file "COPYING".
@@ -34,15 +34,21 @@ class ParseTree(object):
 	"""
 	Class to represent a parse tree.
 	"""
-	def __init__(self, path=None, rules=None, starting_vertex=None, empty=False):
+	def __init__(self, path=None, rules=None, starting_vertex=None, empty=False, parametric=False):
 		if not(empty):
+			print("building parse tree for path %s" % str(path))
 			self._root_vertex = ParseTreeVertex(starting_vertex)
 			self._vertices = [self._root_vertex]
 			self._rules = rules
 			self._target_path = path
 			self._path_progress = []
 			self._all_paths = []
-			self.expand_vertex(self._root_vertex)
+			# if we're building the parse tree of a parametric path,
+			# the algorithm changes slightly
+			if parametric:
+				self.expand_vertex_parametric(self._root_vertex)
+			else:
+				self.expand_vertex(self._root_vertex)
 			self.compute_all_paths(self._root_vertex, [self._root_vertex._symbol])
 		else:
 			# this is the case where we're using a set of paths through
@@ -84,6 +90,59 @@ class ParseTree(object):
 				result = self.expand_vertex(child_vertex)
 				if result == False:
 					return False
+
+	def expand_vertex_parametric(self, vertex):
+		"""
+		Given a vertex in the parse tree, expand it using self._rules
+		to generate its child nodes
+		The logic differs here slightly to cater for the fact that the derived
+		tree may have SCFG vertices as leaves (since we may have a parametric path).
+		"""
+		# first, if vertex holds an SCFG vertex,
+		# we check if adding this vertex will make a prefix or all of the parametric path
+		if type(vertex._symbol) is CFGVertex:
+			if (self._path_progress + [vertex._symbol]) == self._target_path:
+				# we can just return without expanding further
+				print("parametric path generated early")
+				self._path_progress.append(vertex._symbol)
+				return False
+			elif (self._path_progress + [vertex._symbol]) ==\
+					self._target_path[:len(self._path_progress)+1]:
+				print("one parameter generated - returning, but not stopping traversal")
+				self._path_progress.append(vertex._symbol)
+				return True
+		# get the rules associated with the symbol held by this vertex
+		rules = self._rules[vertex._symbol]
+		if len(rules) > 1:
+			progress_length = len(self._path_progress)
+			first_relevant_symbol = self._target_path[progress_length]
+			rule_to_use = rules[0]
+			for rule in rules:
+				if rule[0] == first_relevant_symbol:
+					rule_to_use = rule
+		else:
+			rule_to_use = rules[0]
+
+		for symbol in rule_to_use:
+			child_vertex = ParseTreeVertex(symbol)
+			vertex.add_child(child_vertex)
+			self._vertices.append(child_vertex)
+			if type(symbol) is CFGEdge:
+				# terminal symbol
+				self._path_progress.append(symbol)
+				if self._path_progress == self._target_path:
+					print("target path generated early")
+					return False
+			elif type(symbol) is CFGVertex:
+				# non-terminal symbol
+				result = self.expand_vertex_parametric(child_vertex)
+				if result == False:
+					return False
+
+	def read_leaves(self):
+		sequence = []
+		self.leaves_to_left_right_sequence(self._root_vertex, sequence)
+		return sequence
 
 	def leaves_to_left_right_sequence(self, curr, symbol_sequence):
 		"""
@@ -166,40 +225,9 @@ class ParseTree(object):
 		# there will still be paths that are subpaths of others - for now, leave it
 		# but it may prove more efficient to remove redundant paths now.
 
-		pprint.pprint(all_paths_copy)
+		#pprint.pprint(all_paths_copy)
 
 		new_parse_tree = self.build_parse_tree_from_paths(all_paths_copy)
-
-		# now, follow all the paths through the original parse tree (self), copying
-		# the vertices covered by the paths into a new parse tree
-
-		"""new_parse_tree = ParseTree(vertex_set=[v for v in self._vertices])
-		symbols_to_keep = []
-		for path in all_paths_copy:
-			symbols_to_keep += path
-		symbols_to_keep = list(set(symbols_to_keep))
-
-		print("symbols to keep")
-		print(symbols_to_keep)
-
-		print("parse tree vertices", map(lambda vertex : vertex._symbol, new_parse_tree._vertices))
-
-		vertices_to_remove = []
-
-		for vertex in new_parse_tree._vertices:
-			child_vertices_to_remove = []
-			for child in vertex._children:
-				if not(child._symbol in symbols_to_keep):
-					child_vertices_to_remove.append(child)
-			vertex._children = list(set(vertex._children) - set(child_vertices_to_remove))
-			if not(vertex._symbol in symbols_to_keep):
-				vertices_to_remove.append(vertex)
-
-		new_parse_tree._vertices = list(set(new_parse_tree._vertices) - set(vertices_to_remove))
-
-		print(len(new_parse_tree._vertices))
-
-		print("new parse tree vertices:", map(lambda vertex : vertex._symbol, new_parse_tree._vertices))"""
 
 		return new_parse_tree
 
