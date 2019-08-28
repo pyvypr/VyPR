@@ -362,9 +362,6 @@ class CheckerState(object):
 		self._state = {}
 		for atom in atoms:
 			self._state[atom] = None
-		
-		# we use a tuple to record the instantiation time for each encountered bind variable
-		self._monitor_instantiation_time = (datetime.datetime.now(),)
 
 	def set_state(self, symbol):
 		"""
@@ -430,6 +427,9 @@ class Checker(object):
 		self.atom_to_observation = {}
 		self.atom_to_program_path = {}
 		self.atom_to_state_dict = {}
+		self.collapsing_atom = None
+		# we use a tuple to record the instantiation time for each encountered bind variable
+		self._monitor_instantiation_time = (datetime.datetime.now(),)
 
 		if self._optimised:
 			self.construct_atom_formula_occurrence_map(self._formula)
@@ -503,7 +503,7 @@ class Checker(object):
 				self.atom_to_occurrence_map[formula] = [formula]
 
 	def __repr__(self):
-		return "Monitor state for formula %s is %s" % (self._original_formula, str(self._formula))
+		return "Monitor for formula %s:\n  timestamps: %s\n state: %s\n  verdict: %s" % (self._original_formula, str(self._monitor_instantiation_time), str(self._formula), self._formula.verdict)
 
 	def process_atom_and_value(self, atom, value, atom_index,
 							force_monitor_update=False, inst_point_id=None,
@@ -518,6 +518,8 @@ class Checker(object):
 		# we always overwrite this
 		self.atom_to_program_path[atom_index] = [v for v in program_path]
 		self.atom_to_state_dict[atom_index] = state_dict
+
+		initial_verdict = self._formula.verdict
 		
 		print("PROCESSING ATOM %s" % atom)
 		if type(atom) is StateValueInInterval:
@@ -546,6 +548,12 @@ class Checker(object):
 				result = self.check_optimised(atom, force_monitor_update=force_monitor_update)
 			else:
 				result = self.check_optimised(lnot(atom), force_monitor_update=force_monitor_update)
+
+		final_verdict = self._formula.verdict
+
+		if initial_verdict != final_verdict:
+			# for each monitor, this branch can only ever be traversed once
+			self.collapsing_atom = atom
 
 		return result
 
