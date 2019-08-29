@@ -213,6 +213,39 @@ def read_configuration(file):
 
 	return json.loads(contents)
 
+def get_instrumentation_points_from_comp_sequence(value_from_binding, moves):
+	"""
+	Given a starting point (value_from_binding) and a set of moves,
+	traverse the SCFG and determine the set of instrumentation points.
+	"""
+
+	# iterate through the moves we have to make,
+	# using the type of the operator used in the move to compute the points we have to instrument
+	# we set the default set to include just the current binding
+	# for the case where no transformation happens
+	instrumentation_points = [value_from_binding]
+	# currently only works for a single move
+	# for multiple moves we need to apply the transformation to each "previous" instrumentation point
+	"""
+	At the moment, this code is wrong - it's supposed to take as input the previous round of results,
+	but always take the first round - needs to be changed.
+	Will do when I consider nested future time operators.
+	"""
+	for move in moves:
+		if type(move) is NextStaticTransition:
+			calls = []
+			if type(value_from_binding) is CFGVertex:
+				scfg.next_calls(value_from_binding, move._operates_on, calls, marked_vertices=[])
+			elif type(value_from_binding) is CFGEdge:
+				scfg.next_calls(value_from_binding._target_state, move._operates_on, calls, marked_vertices=[])
+			instrumentation_points = calls
+		elif type(move) is SourceStaticState:
+			instrumentation_points = [value_from_binding]
+		elif type(move) is DestinationStaticState:
+			instrumentation_points = [value_from_binding]
+
+	return instrumentation_points
+
 if __name__ == "__main__":
 
 	parser = argparse.ArgumentParser(description='Instrumentation for VyPR.')
@@ -426,28 +459,67 @@ if __name__ == "__main__":
 						print("There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
 						exit()
 
-					element_types = []
-
 					static_qd_to_point_map[m] = {}
 
-					"""
-					TODO: instrumentation will change a bit if we want to implement atoms derived from multiple variables.
-					The change may include removing the grouping by bind variables, since we don't really need this...
-					"""
+					for (atom_index, atom) in enumerate(atoms):
 
-					# iterate through bind variables
+						static_qd_to_point_map[m][atom_index] = {}
+
+						if type(atom) is formula_tree.StateValueEqualToMixed:
+
+							# there may be multiple bind variables
+							composition_sequences = derive_composition_sequence(atom)
+
+							# get lhs and rhs bind variables
+							lhs_comp_sequence = composition_sequences["lhs"]
+							lhs_bind_variable = lhs_comp_sequence[-1]
+							lhs_bind_variable_index = formula_structure._bind_variables.index(lhs_bind_variable)
+							lhs_starting_point = element[lhs_bind_variable_index]
+
+							rhs_comp_sequence = composition_sequences["rhs"]
+							rhs_bind_variable = rhs_comp_sequence[-1]
+							rhs_bind_variable_index = formula_structure._bind_variables.index(rhs_bind_variable)
+							rhs_starting_point = element[rhs_bind_variable_index]
+
+							lhs_moves = list(reversed(lhs_comp_sequence[1:-1]))
+							rhs_moves = list(reversed(rhs_comp_sequence[1:-1]))
+
+							lhs_instrumentation_points = get_instrumentation_points_from_comp_sequence(lhs_starting_point, lhs_moves)
+							rhs_instrumentation_points = get_instrumentation_points_from_comp_sequence(rhs_starting_point, rhs_moves)
+
+							# 0 and 1 are for lhs and rhs respectively
+							static_qd_to_point_map[m][atom_index][0] = lhs_instrumentation_points
+							static_qd_to_point_map[m][atom_index][1] = rhs_instrumentation_points
+
+						else:
+
+							# just one composition sequence, so one set of instrumentation points
+
+							composition_sequence = derive_composition_sequence(atom)
+							bind_variable = composition_sequence[-1]
+							variable_index = formula_structure._bind_variables.index(bind_variable)
+							value_from_binding = element[variable_index]
+							moves = list(reversed(composition_sequence[1:-1]))
+							instrumentation_points = get_instrumentation_points_from_comp_sequence(value_from_binding, moves)
+
+							# for simple atoms, there is no lhs and rhs so we just use 0
+							static_qd_to_point_map[m][atom_index][0] = instrumentation_points
+
+					"""# iterate through bind variables
 					for (variable_index, bind_variable) in enumerate(formula_structure._bind_variables):
 
 						static_qd_to_point_map[m][variable_index] = {}
 
 						# iterate through atoms derived from the current bind variable
-						for atom in filter(lambda atom : get_base_variable(atom) == bind_variable, atoms):
+						for atom in filter(
+								lambda atom : get_base_variable(atom) == bind_variable or bind_variable in get_base_variable(atom),
+								atoms
+							):
 
 							atom_index = atoms.index(atom)
 
 							composition_sequence = derive_composition_sequence(atom)
 							print("COMPOSITION SEQUENCE FOR ATOM %s IS %s" % (atom, composition_sequence))
-							input_bind_variable = composition_sequence[-1]
 							value_from_binding = element[variable_index]
 
 							# the first element tells us how to instrument (variable value, function call duration, etc)
@@ -456,34 +528,14 @@ if __name__ == "__main__":
 							# the bind variable
 							moves = list(reversed(composition_sequence[1:-1]))
 
-							# iterate through the moves we have to make,
-							# using the type of the operator used in the move to compute the points we have to instrument
-							# we set the default set to include just the current binding
-							# for the case where no transformation happens
-							instrumentation_points = [value_from_binding]
-							# currently only works for a single move
-							# for multiple moves we need to apply the transformation to each "previous" instrumentation point
-							"""
-							At the moment, this code is wrong - it's supposed to take as input the previous round of results,
-							but always take the first round - needs to be changed.
-							Will do when I consider nested future time operators.
-							"""
-							for move in moves:
-								if type(move) is NextStaticTransition:
-									calls = []
-									if type(value_from_binding) is CFGVertex:
-										scfg.next_calls(value_from_binding, move._operates_on, calls, marked_vertices=[])
-									elif type(value_from_binding) is CFGEdge:
-										scfg.next_calls(value_from_binding._target_state, move._operates_on, calls, marked_vertices=[])
-									instrumentation_points = calls
-								elif type(move) is SourceStaticState:
-									instrumentation_points = [value_from_binding]
-								elif type(move) is DestinationStaticState:
-									instrumentation_points = [value_from_binding]
+							instrumentation_points = get_instrumentation_points_from_comp_sequence(value_from_binding, moves)
 
 							print(instrumentation_points)
 
-							static_qd_to_point_map[m][variable_index][atom_index] = instrumentation_points
+							static_qd_to_point_map[m][variable_index][atom_index] = instrumentation_points"""
+
+				pprint.pprint(static_qd_to_point_map)
+				exit()
 
 				# now, perform the instrumentation
 
@@ -692,6 +744,85 @@ if __name__ == "__main__":
 
 								parent_block.insert(index_in_block+1, queue_ast)
 								parent_block.insert(index_in_block+1, record_state_ast)
+
+						elif type(atom) in [formula_tree.StateValueEqualToMixed]:
+							"""
+							We're instrumenting multiple states, so we need to perform instrumentation on two separate points.
+							"""
+
+							def instrument_point(state, point, sub_index):
+								"""
+								state is the PyCFTL object,
+								and point is the part of the SCFG found by traversal.
+								"""
+								global verification_instruction
+
+								instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, {variable_index}," +\
+								"{global_atom_index}, {instrumentation_set_index}, {instrumentation_point_db_id}, {{ '{atom_program_variable}' : {observed_value} }}, __thread_id, {sub_index}")\
+								.format(
+									formula_hash = formula_hash,
+									function_qualifier = instrument_function_qualifier,
+									binding_space_index = list_of_lists[0],
+									variable_index = list_of_lists[1],
+									global_atom_index = list_of_lists[2],
+									instrumentation_set_index = list_of_lists[3],
+									instrumentation_point_db_id = list_of_lists[4],
+									atom_program_variable = atom._name,
+									observed_value = ("record_state_%s" % state_variable_alias),
+									sub_index = sub_index
+								)
+								state_recording_instrument += "%s((%s))" % (verification_instruction, instrument_tuple)
+
+								record_state_ast = ast.parse(state_recording_instrument).body[0]
+								queue_ast = ast.parse(state_recording_instrument).body[1]
+
+								if type(state) is SourceStaticState or type(state) is DestinationStaticState:
+									# if the state we're measuring a property of is derived from a source operator,
+									# then the instrumentation point we're given is an SCFG edge which contains
+									# an instruction for us to place a state recording instrument before
+
+									print("adding state recording instrument for source or target")
+
+									parent_block = point._instruction._parent_body
+
+									record_state_ast.lineno = point._instruction.lineno
+									record_state_ast.col_offset = point._instruction.col_offset
+									queue_ast.lineno = point._instruction.lineno
+									queue_ast.col_offset = point._instruction.col_offset
+
+									index_in_block = parent_block.index(point._instruction)
+
+									if type(state) is SourceStaticState:
+										# for source state recording, we record the state, but only insert its value after
+										# this is so triggers can be inserted before normal instruments without introducing
+										# a special case for trigger insertion
+										parent_block.insert(index_in_block, queue_ast)
+										parent_block.insert(index_in_block, record_state_ast)
+									elif type(atom._state) is DestinationStaticState:
+										parent_block.insert(index_in_block+1, queue_ast)
+										parent_block.insert(index_in_block+1, record_state_ast)
+								else:
+
+									print("not source or destination state - performing normal instrumentation")
+									print(point, atom)
+									incident_edge = point._previous_edge
+									parent_block = incident_edge._instruction._parent_body
+
+									record_state_ast.lineno = incident_edge._instruction.lineno
+									record_state_ast.col_offset = incident_edge._instruction.col_offset
+									queue_ast.lineno = incident_edge._instruction.lineno
+									queue_ast.col_offset = incident_edge._instruction.col_offset
+
+									index_in_block = parent_block.index(incident_edge._instruction)
+
+									# insert instruments in reverse order
+
+									parent_block.insert(index_in_block+1, queue_ast)
+									parent_block.insert(index_in_block+1, record_state_ast)
+
+							# for each side of the atom (LHS and RHS), instrument the necessary points
+
+
 
 				if EXPLANATION:
 					# if explanation was turned on in the configuration file, insert path instruments.

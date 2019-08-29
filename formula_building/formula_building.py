@@ -168,6 +168,14 @@ Methods labelled with "Generates an atom." takes the state
 or transition so far and builds a predicate over it to generate an atom.
 """
 
+def requires_state_or_transition(obj):
+	"""
+	Used to determine whether a value for the RHS of an atom
+	is a primitive type that we don't need to observe anything for,
+	or derived from a state or transition
+	"""
+	return type(obj) in [StateValue, StaticStateLength]
+
 class StaticState(object):
 	"""
 	Models a state attained by the monitored program at runtime.
@@ -259,11 +267,22 @@ class StateValue(object):
 		"""
 		Generates an atom.
 		"""
-		return formula_tree.StateValueEqualTo(
-			self._state,
-			self._name,
-			value
-		)
+		if requires_state_or_transition(value):
+			# the RHS of the comparison requires observation of another state or transition
+			# so we use a different class to deal with this
+			return formula_tree.StateValueEqualToMixed(
+				self._state,
+				self._name,
+				value._state,
+				value._name
+			)
+		else:
+			# the RHS of the comparison is just a constant
+			return formula_tree.StateValueEqualTo(
+				self._state,
+				self._name,
+				value
+			)
 
 	def length(self):
 		return formula_tree.StateValueLength(self)
@@ -387,38 +406,7 @@ class Duration(object):
 		else:
 			raise Exception("Duration predicate wasn't defined properly.")
 
-def derive_composition_sequence(atom):
-	"""
-	Given an atom, derive the sequence of operator compositions.
-	TODO: support nesting with things other than NextStaticTransition
-	"""
-	"""sequence = [atom]
-	print(atom)
-
-	while type(current_operator) is NextStaticTransition:
-		sequence.append(current_operator)
-		current_operator = current_operator._centre"""
-
-	print("deriving composition sequence for atom %s" % atom)
-
-	sequence = [atom]
-	if type(atom) == formula_tree.LogicalNot:
-		print("detected negation - removing")
-		current_operator = atom.operand
-	else:
-		current_operator = atom
-
-	# for now, a horrible trick
-	#import monitor_synthesis
-
-	if type(current_operator) == formula_tree.TransitionDurationInInterval:
-		current_operator = current_operator._transition
-	elif type(current_operator) == formula_tree.StateValueEqualTo:
-		current_operator = current_operator._state
-	elif type(current_operator) == formula_tree.StateValueInInterval:
-		current_operator = current_operator._state
-	"""elif type(atom) is formula_tree.ValueGivenByState:
-		current_operator = atom._state"""
+def composition_sequence_from_value(sequence, current_operator):
 
 	while not(type(current_operator) in [StaticState, StaticTransition]):
 		sequence.append(current_operator)
@@ -432,10 +420,60 @@ def derive_composition_sequence(atom):
 
 	# add the input bind variable to the composition sequence
 	sequence.append(current_operator)
-
-	print("final composition sequence is %s" % str(sequence))
-
 	return sequence
+
+def derive_composition_sequence(atom):
+	"""
+	Given an atom, derive the sequence of operator compositions.
+	"""
+
+	print("deriving composition sequence for atom %s" % atom)
+
+	# if the atom has an LHS and an RHS, there must be two composition sequences
+
+	sequence = [atom]
+	if type(atom) == formula_tree.LogicalNot:
+		print("detected negation - removing")
+		current_operator = atom.operand
+	else:
+		current_operator = atom
+
+	if type(atom) == formula_tree.StateValueEqualToMixed:
+
+		# atom is mixed - two composition sequences
+
+		lhs = atom._lhs
+		print(lhs)
+		rhs = atom._rhs
+		print(rhs)
+
+		lhs_sequence = [atom]
+		rhs_sequence = [atom]
+
+		comp_sequence_lhs = composition_sequence_from_value(lhs_sequence, lhs)
+		comp_sequence_rhs = composition_sequence_from_value(rhs_sequence, rhs)
+
+		print("final composition sequence for lhs is %s" % str(comp_sequence_lhs))
+		print("final composition sequence for rhs is %s" % str(comp_sequence_rhs))
+
+		return {"lhs" : comp_sequence_lhs, "rhs" : comp_sequence_rhs}
+
+	else:
+
+		# atom is simple - just one composition sequence
+
+		if type(current_operator) == formula_tree.TransitionDurationInInterval:
+			current_operator = current_operator._transition
+		elif type(current_operator) == formula_tree.StateValueEqualTo:
+			current_operator = current_operator._state
+		elif type(current_operator) == formula_tree.StateValueInInterval:
+			current_operator = current_operator._state
+
+		sequence = composition_sequence_from_value(sequence, current_operator)
+
+		print("final composition sequence is %s" % str(sequence))
+
+		return sequence
 
 def get_base_variable(atom):
 	"""
@@ -443,6 +481,9 @@ def get_base_variable(atom):
 	"""
 
 	composition_sequence = derive_composition_sequence(atom)
-	variable = composition_sequence[-1]
-
-	return variable
+	# if the atom was mixed, we may have two base variables
+	# otherwise we just have one
+	if type(composition_sequence) is dict:
+		return [composition_sequence["lhs"][-1], composition_sequence["rhs"][-1]]
+	else:
+		return composition_sequence[-1]

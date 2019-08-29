@@ -106,6 +106,63 @@ class StateValueEqualTo(Atom):
 	def check(self, value):
 		return self._value == value[self._name]
 
+class StateValueEqualToMixed(Atom):
+	"""
+	This class models the atom (s1(x) = s2(y)).
+	"""
+
+	def __init__(self, lhs, lhs_name, rhs, rhs_name):
+		self._lhs = lhs
+		self._rhs = rhs
+		self._lhs_name = lhs_name
+		self._rhs_name = rhs_name
+		self._lhs_value = None
+		self._rhs_value = None
+
+	def __repr__(self):
+		return "(%s)(%s) = (%s)(%s)" % (self._lhs, self._lhs_name, self._rhs, self._rhs_name)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is StateValueEqualToMixed:
+			return (self._lhs == other_atom._lhs
+				and self._lhs_name == self._rhs_name)
+		else:
+			return False
+
+	"""
+	Mixed comparison atoms require values from multiple points at runtime.
+	Hence, we store the LHS and RHS when we receive them, each time
+	checking whether we have equality yet.
+	"""
+
+	def update(self, observation, index):
+		"""
+		For a given observation and index (0 for LHS and 1 for RHS),
+		update the atom.
+		"""
+		if index == 0:
+			self.check_lhs_value(observation)
+		elif index == 1:
+			self.check_rhs_value(observation)
+
+	def check_lhs_value(self, value):
+		self.lhs_value = value
+		return self.check()
+
+	def check_rhs_value(self, value):
+		self.rhs_value = value
+		return self.check()
+
+	def check(self):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check for equality.
+		"""
+		if self.lhs_value is None or self.rhs_value is None:
+			return None
+		else:
+			return self.lhs_value == self.rhs_value
+
 class StateValueLengthInInterval(Atom):
 	"""
 	This class models the atom (len(s(x)) in I).
