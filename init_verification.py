@@ -25,10 +25,15 @@ from verdict_reports import VerdictReport
 from control_flow_graph.construction import CFGEdge, CFGVertex
 
 VERDICT_SERVER_URL = None
+VYPR_OUTPUT_VERBOSE = True
 
 # thank you to the CMS Conditions Browser team for this
 def to_timestamp(obj):
     return obj.total_seconds() if isinstance(obj, datetime.timedelta) else obj
+
+def vypr_output(string):
+	if VYPR_OUTPUT_VERBOSE:
+		print("[VyPR] - %s - %s" % (str(datetime.datetime.now()), string))
 
 def send_verdict_report(function_name, time_of_call, verdict_report, binding_to_line_numbers, http_request_time, property_hash):
 	"""
@@ -74,6 +79,7 @@ def send_verdict_report(function_name, time_of_call, verdict_report, binding_to_
 def consumption_thread_function(verification_obj):
 	# the web service has to be considered as running forever, so the monitoring loop for now should also run forever
 	# this needs to be changed for a clean exit
+	INACTIVE_MONITORING = False
 	while True:
 
 		# take top element from the queue
@@ -81,6 +87,29 @@ def consumption_thread_function(verification_obj):
 			top_pair = verification_obj.consumption_queue.get(timeout=1)
 		except:
 			continue
+
+		if top_pair[0] == "end-monitoring":
+			# return from the monitoring function to end the monitoring thread
+			vypr_output("Returning from monitoring thread.")
+			return
+
+		# if monitoring is inactive, we do nothing with what we consume unless it's a resume message
+		if INACTIVE_MONITORING:
+			if top_pair[0] == "inactive-monitoring-stop":
+				# return from the monitoring function to end the monitoring thread
+				vypr_output("Restarting monitoring.  Monitoring thread will still be alive.")
+				INACTIVE_MONITORING = False
+			continue
+		else:
+			if top_pair[0] == "inactive-monitoring-start":
+				# return from the monitoring function to end the monitoring thread
+				vypr_output("Pausing monitoring.  Monitoring thread will still be alive.")
+				# turn on inactive monitoring
+				INACTIVE_MONITORING = True
+				# skip to the next iteration of the consumption loop
+				continue
+			# if inactive monitoring is off (so monitoring is running), process what we consumed
+
 
 		print("CONSUMING:")
 		print(top_pair)
@@ -365,22 +394,53 @@ def read_configuration(file):
 
 class Verification(object):
 
-	def __init__(self, flask_object):
+	def __init__(self, flask_object=None):
 		"""
 		Sets up the consumption thread for events from instruments.
 		"""
-		print("INSTANTIATING VERIFICATION OBJ")
-
-		# add the request time recording function before every request
-		def set_request_time():
-			import datetime
-			flask.g.request_time = datetime.datetime.now()
-		flask_object.before_request(set_request_time)
+		vypr_output("Initialising VyPR monitoring...")
 
 		# read configuration file
 		inst_configuration = read_configuration("vypr.config")
-		global VERDICT_SERVER_URL
+		global VERDICT_SERVER_URL, VYPR_OUTPUT_VERBOSE
 		VERDICT_SERVER_URL = inst_configuration.get("verdict_server_url") if inst_configuration.get("verdict_server_url") else "http://localhost:9001/"
+		VYPR_OUTPUT_VERBOSE = inst_configuration.get("verbose") if inst_configuration.get("verbose") else True
+
+		# try to connect to the verdict server before we set anything up
+		try:
+			attempt = requests.get(VERDICT_SERVER_URL)
+		except Exception:
+			vypr_output("Couldn't connect to the verdict server at '%s'.  Initialisation failed." % VERDICT_SERVER_URL)
+			return
+
+		if flask_object:
+			# add the request time recording function before every request
+			def set_request_time():
+				import datetime
+				flask.g.request_time = datetime.datetime.now()
+			flask_object.before_request(set_request_time)
+			# add VyPR end points - we may use this for statistics collection on the server
+			# add the safe exist end point
+			@flask_object.route("/vypr/stop-monitoring/")
+			def endpoint_stop_monitoring():
+				from app import verification
+				# send end-monitoring message
+				verification.end_monitoring()
+				# wait for the thread to end
+				verification.consumption_thread.join()
+				return "VyPR monitoring thread exited.  The server must be restarted to turn monitoring back on."
+
+			@flask_object.route("/vypr/pause-monitoring/")
+			def endpoint_pause_monitoring():
+				from app import verification
+				verification.pause_monitoring()
+				return "VyPR monitoring paused - thread is still running."
+
+			@flask_object.route("/vypr/resume-monitoring/")
+			def endpoint_resume_monitoring():
+				from app import verification
+				verification.resume_monitoring()
+				return "VyPR monitoring resumed."
 
 		# set up the maps that the monitoring algorithm that the consumption thread runs
 
@@ -404,7 +464,7 @@ class Verification(object):
 
 			property_hash = token_chain[start_of_property]
 
-			print("Setting up monitoring state for module/function/property triple %s, %s, %s" % (module_string, function, property_hash))
+			vypr_output("Setting up monitoring state for module/function/property triple %s, %s, %s" % (module_string, function, property_hash))
 
 			module_function_string = "%s.%s" % (module_string, function)
 
@@ -412,9 +472,9 @@ class Verification(object):
 				self.function_to_maps[module_function_string] = {}
 			self.function_to_maps[module_function_string][property_hash] = PropertyMapGroup(module_string, function, property_hash)
 
-		print(self.function_to_maps)
+		vypr_output(self.function_to_maps)
 
-		print("Setting up monitoring thread that will deal all properties across all functions.")
+		vypr_output("Setting up monitoring thread.")
 
 		# setup consumption queue and store it globally across requests
 		self.consumption_queue = Queue.Queue()
@@ -425,6 +485,20 @@ class Verification(object):
 		)
 		self.consumption_thread.start()
 
+		vypr_output("VyPR monitoring initialisation finished.")
+
 	def send_event(self, event_description):
-		print("adding %s to consumption queue" % str(event_description))
+		vypr_output("adding %s to consumption queue" % str(event_description))
 		self.consumption_queue.put(event_description)
+
+	def end_monitoring(self):
+		vypr_output("ending VyPR monitoring")
+		self.consumption_queue.put(("end-monitoring",))
+
+	def pause_monitoring(self):
+		vypr_output("Sending monitoring pause message.")
+		self.consumption_queue.put(("inactive-monitoring-start",))
+
+	def resume_monitoring(self):
+		vypr_output("Sending monitoring resume message.")
+		self.consumption_queue.put(("inactive-monitoring-stop",))
