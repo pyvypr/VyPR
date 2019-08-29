@@ -31,9 +31,12 @@ VYPR_OUTPUT_VERBOSE = True
 def to_timestamp(obj):
     return obj.total_seconds() if isinstance(obj, datetime.timedelta) else obj
 
-def vypr_output(string):
+def vypr_output(string, *args):
 	if VYPR_OUTPUT_VERBOSE:
-		print("[VyPR] - %s - %s" % (str(datetime.datetime.now()), string))
+		if len(args) > 0:
+			print(("[VyPR] - %s - %s" % (str(datetime.datetime.now()), string)), args)
+		else:
+			print("[VyPR] - %s - %s" % (str(datetime.datetime.now()), string))
 
 def send_verdict_report(function_name, time_of_call, verdict_report, binding_to_line_numbers, http_request_time, property_hash):
 	"""
@@ -41,11 +44,10 @@ def send_verdict_report(function_name, time_of_call, verdict_report, binding_to_
 	"""
 	global VERDICT_SERVER_URL
 	verdicts = verdict_report.get_final_verdict_report()
-	print("Sending verdicts %s to server" % verdicts)
+	vypr_output("Sending verdicts to server")
 	for bind_space_index in verdicts.keys():
 		verdict_list = verdicts[bind_space_index]
 		for verdict in verdict_list:
-			print("verdict - ", verdict)
 			# remember to deal with datetime objects in json serialisation
 			request_body_dict = {
 				"function_name" : function_name,
@@ -68,13 +70,12 @@ def send_verdict_report(function_name, time_of_call, verdict_report, binding_to_
 			}
 			try:
 				response = requests.post(os.path.join(VERDICT_SERVER_URL, "register_verdict/"), data=json.dumps(request_body_dict))
-				print(response)
 			except Exception as e:
-				print("Something went wrong when sending verdict information to the verdict server.  The verdict information we tried to send is now lost.")
+				vypr_output("Something went wrong when sending verdict information to the verdict server.  The verdict information we tried to send is now lost.")
 				import traceback
-				traceback.print_exc()
+				vypr_output(traceback.format_exc())
 
-	print("SENT VERDICT TO SERVER")
+	vypr_output("Verdicts sent.")
 
 def consumption_thread_function(verification_obj):
 	# the web service has to be considered as running forever, so the monitoring loop for now should also run forever
@@ -111,8 +112,8 @@ def consumption_thread_function(verification_obj):
 			# if inactive monitoring is off (so monitoring is running), process what we consumed
 
 
-		print("CONSUMING:")
-		print(top_pair)
+		vypr_output("Consuming:")
+		vypr_output(top_pair)
 
 		property_hash = top_pair[0]
 
@@ -143,9 +144,6 @@ def consumption_thread_function(verification_obj):
 
 				# before resetting the qd -> monitor map, go through it to find monitors
 				# that reached a verdict, and register those in the verdict report
-
-				print("final monitor states")
-				pprint.pprint(static_qd_to_monitors)
 
 				for static_qd_index in static_qd_to_monitors:
 					for monitor in static_qd_to_monitors[static_qd_index]:
@@ -183,8 +181,6 @@ def consumption_thread_function(verification_obj):
 						elif type(bind_var) is CFGEdge:
 							binding_to_line_numbers[bind_space_index].append(bind_var._instruction.lineno)
 
-					print("gave verdicts %s" % (", ".join(map(str, report_map[bind_space_index]))))
-
 				# send the verdict
 				# we send the function name, the time of the function call, the verdict report object,
 				# the map of bindings to their line numbers and the date/time of the request the identify it (single threaded...)
@@ -200,28 +196,26 @@ def consumption_thread_function(verification_obj):
 				maps.program_path = []
 
 			elif scope_event == "start":
-				print("*"*50)
-				print("FUNCTION HAS STARTED")
-				print("*"*50)
-
-				print(static_qd_to_monitors)
+				vypr_output("*"*50)
+				vypr_output("FUNCTION HAS STARTED")
+				vypr_output("*"*50)
 
 				# remember when the function call started
 				maps.latest_time_of_call = datetime.datetime.now()
 
-				print("*"*50)
+				vypr_output("*"*50)
 
 		if instrument_type == "trigger":
 			# we've received a trigger instrument
 
-			print("processing trigger - dealing with monitor instantiation")
+			vypr_output("processing trigger - dealing with monitor instantiation")
 
 			static_qd_index = top_pair[2]
 			bind_variable_index = top_pair[3]
 
-			print("trigger is for bind variable %i" % bind_variable_index)
+			vypr_output("trigger is for bind variable %i" % bind_variable_index)
 			if bind_variable_index == 0:
-				print("instantiating new, clean monitor")
+				vypr_output("instantiating new, clean monitor")
 				# we've encountered a trigger for the first bind variable, so we simply instantiate a new monitor
 				new_monitor = formula_tree.new_monitor(formula_structure.get_formula_instance())
 				try:
@@ -229,14 +223,14 @@ def consumption_thread_function(verification_obj):
 				except:
 					static_qd_to_monitors[static_qd_index] = [new_monitor]
 			else:
-				print("processing existing monitors")
+				vypr_output("processing existing monitors")
 				# we look at the monitors' timestamps, and decide whether to generate a new monitor
 				# and copy over existing information, or update timestamps of existing monitors
 				new_monitors = []
 				subsequences_processed = []
 				for monitor in static_qd_to_monitors[static_qd_index]:
 					# check if the monitor's timestamp sequence includes a timestamp for this bind variable
-					print("  processing monitor with timestamp sequence %s" % str(monitor._monitor_instantiation_time))
+					vypr_output("  processing monitor with timestamp sequence %s" % str(monitor._monitor_instantiation_time))
 					if len(monitor._monitor_instantiation_time) == bind_variable_index+1:
 						if monitor._monitor_instantiation_time[:bind_variable_index] in subsequences_processed:
 							# the same subsequence might have been copied and extended multiple times
@@ -245,7 +239,7 @@ def consumption_thread_function(verification_obj):
 						else:
 							subsequences_processed.append(monitor._monitor_instantiation_time[:bind_variable_index])
 							# construct new monitor
-							print("    instantiating new monitor with modified timestamp sequence")
+							vypr_output("    instantiating new monitor with modified timestamp sequence")
 							# instantiate a new monitor using the timestamp subsequence excluding the current bind variable
 							# and copy over all observation, path and state information
 
@@ -275,7 +269,7 @@ def consumption_thread_function(verification_obj):
 										new_monitor.atom_to_state_dict[atom_index] = monitor.atom_to_state_dict[atom_index]
 
 					elif len(monitor._monitor_instantiation_time) == bind_variable_index:
-						print("    updating existing monitor timestamp sequence")
+						vypr_output("    updating existing monitor timestamp sequence")
 						# extend the monitor's timestamp sequence
 						tmp_sequence = list(monitor._monitor_instantiation_time)
 						tmp_sequence.append(datetime.datetime.now())
@@ -304,7 +298,7 @@ def consumption_thread_function(verification_obj):
 				# instrument isn't from a transition measurement
 				state_dict = None
 
-			print("consuming data from an instrument in thread %i" % thread_id)
+			vypr_output("consuming data from an instrument in thread %i" % thread_id)
 
 			lists = zip(static_qd_indices, bind_variable_indices, atom_indices, instrumentation_set_indices, instrumentation_point_db_ids)
 
@@ -316,13 +310,13 @@ def consumption_thread_function(verification_obj):
 				instrumentation_set_index = values[3]
 				instrumentation_point_db_id = values[4]
 
-				print("binding space index", static_qd_index)
-				print("variable index", bind_variable_index)
-				print("atom_index", atom_index)
-				print("instrumentation set index", instrumentation_set_index)
-				print("instrumentation point db id", instrumentation_point_db_id)
-				print("observed value", observed_value)
-				print("state dictionary", state_dict)
+				vypr_output("binding space index", static_qd_index)
+				vypr_output("variable index", bind_variable_index)
+				vypr_output("atom_index", atom_index)
+				vypr_output("instrumentation set index", instrumentation_set_index)
+				vypr_output("instrumentation point db id", instrumentation_point_db_id)
+				vypr_output("observed value", observed_value)
+				vypr_output("state dictionary", state_dict)
 
 				instrumentation_atom = atoms[atom_index]
 
@@ -335,9 +329,9 @@ def consumption_thread_function(verification_obj):
 		# set the task as done
 		verification_obj.consumption_queue.task_done()
 
-		print("CONSUMPTION DONE")
+		vypr_output("Consumption finished.")
 
-		print("="*100)
+		vypr_output("="*100)
 
 class PropertyMapGroup(object):
 	"""
