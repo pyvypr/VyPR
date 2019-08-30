@@ -118,6 +118,7 @@ class StateValueEqualToMixed(Atom):
 		self._rhs_name = rhs_name
 		self._lhs_value = None
 		self._rhs_value = None
+		self.verdict = None
 
 	def __repr__(self):
 		return "(%s)(%s) = (%s)(%s)" % (self._lhs, self._lhs_name, self._rhs, self._rhs_name)
@@ -141,27 +142,20 @@ class StateValueEqualToMixed(Atom):
 		update the atom.
 		"""
 		if index == 0:
-			self.check_lhs_value(observation)
+			self._lhs_value = observation
 		elif index == 1:
-			self.check_rhs_value(observation)
+			self._rhs_value = observation
 
-	def check_lhs_value(self, value):
-		self.lhs_value = value
-		return self.check()
-
-	def check_rhs_value(self, value):
-		self.rhs_value = value
-		return self.check()
-
-	def check(self):
+	def check(self, value, index):
 		"""
 		If either the RHS or LHS are None, we don't try to reach a truth value.
 		But if they are both not equal to None, we check for equality.
 		"""
-		if self.lhs_value is None or self.rhs_value is None:
+		self.update(value, index)
+		if self._lhs_value is None or self._rhs_value is None:
 			return None
 		else:
-			return self.lhs_value == self.rhs_value
+			return self._lhs_value == self._rhs_value
 
 class StateValueLengthInInterval(Atom):
 	"""
@@ -172,6 +166,7 @@ class StateValueLengthInInterval(Atom):
 		self._state = state
 		self._name = name
 		self._interval = interval
+		self.verdict = None
 
 	def __repr__(self):
 		return "len(%s(%s)) in %s" % (self._state, self._name, self._interval)
@@ -562,49 +557,65 @@ class Checker(object):
 	def __repr__(self):
 		return "Monitor for formula %s:\n  timestamps: %s\n state: %s\n  verdict: %s" % (self._original_formula, str(self._monitor_instantiation_time), str(self._formula), self._formula.verdict)
 
-	def process_atom_and_value(self, atom, value, atom_index,
+	def check_atom_truth_value(self, atom, value, atom_sub_index):
+		"""
+		Given an atom, an observation and, if the atom is mixed,
+		an indication of whether the observation is for the lhs or rhs
+		"""
+		check_value = atom.check(value, atom_sub_index)
+		if check_value == True:
+			print("atom %s gave True" % atom)
+			result = self.check_optimised(atom)
+		elif check_value == False:
+			print("atom %s gave False" % atom)
+			result = self.check_optimised(lnot(atom))
+		elif check_value == None:
+			# mixed atoms can still be unconclusive if only part of them has been given an observation
+			# in this case, the atom maintains state so no changes are required to the formula tree
+			print("mixed atom %s is inconclusive with lhs %s and rhs %s" % (atom, atom._lhs_value, atom._rhs_value))
+			result = None
+		return result
+
+
+	def process_atom_and_value(self, atom, value, atom_index, atom_sub_index,
 							force_monitor_update=False, inst_point_id=None,
 							program_path=None, state_dict=None):
 		"""
 		Given an atom and a value, update this monitor.
 		"""
 		print("processing observation with program path %s" % program_path)
-		# record the observation and path
+		# record the observation, path and state
+		# we have to use lists to be able to capture  multiple observations required for mixed atoms
 		if not(self.atom_to_observation.get(atom_index)):
-			self.atom_to_observation[atom_index] = (value, inst_point_id)
-		# we always overwrite this
-		self.atom_to_program_path[atom_index] = [v for v in program_path]
-		self.atom_to_state_dict[atom_index] = state_dict
+			self.atom_to_observation[atom_index] = {}
+			self.atom_to_program_path[atom_index] = {}
+			self.atom_to_state_dict[atom_index] = {}
+
+		if not(self.atom_to_observation[atom_index].get(atom_sub_index)):
+			self.atom_to_observation[atom_index][atom_sub_index] = (value, inst_point_id)
+			self.atom_to_program_path[atom_index][atom_sub_index] = [v for v in program_path]
+			self.atom_to_state_dict[atom_index][atom_sub_index] = state_dict
+		else:
+			# the observation has already been processed - no need to do anything
+			return
 
 		initial_verdict = self._formula.verdict
 		
 		print("PROCESSING ATOM %s" % atom)
 		if type(atom) is StateValueInInterval:
 			print("processing binding %s wrt interval %s" % (value, atom._interval))
-			if atom.check(value):
-				result = self.check_optimised(atom, force_monitor_update=force_monitor_update)
-			else:
-				result = self.check_optimised(lnot(atom), force_monitor_update=force_monitor_update)
+			result = self.check_atom_truth_value(atom, value, atom_sub_index)
 		elif type(atom) is TransitionDurationInInterval:
 			time_taken = value.total_seconds()
-			print("processing time taken %s wrt interval %s" % (time_taken, atom._interval))
-			if atom.check(time_taken):
-				result = self.check_optimised(atom, force_monitor_update=force_monitor_update)
-			else:
-				result = self.check_optimised(lnot(atom), force_monitor_update=force_monitor_update)
+			result = self.check_atom_truth_value(atom, time_taken, atom_sub_index)
 		elif type(atom) is StateValueEqualTo:
 			print("processing state value equality for observed valued %s wrt %s" % (str(value), str(atom._value)))
-			if atom.check(value):
-				result = self.check_optimised(atom, force_monitor_update=force_monitor_update)
-			else:
-				result = self.check_optimised(lnot(atom), force_monitor_update=force_monitor_update)
+			result = self.check_atom_truth_value(atom, value, atom_sub_index)
 		elif type(atom) is StateValueInOpenInterval:
 			time_taken = value.total_seconds()
-			print("processing time taken %s wrt open interval %s" % (time_taken, atom._interval))
-			if atom.check(time_taken):
-				result = self.check_optimised(atom, force_monitor_update=force_monitor_update)
-			else:
-				result = self.check_optimised(lnot(atom), force_monitor_update=force_monitor_update)
+			result = self.check_atom_truth_value(atom, time_taken, atom_sub_index)
+		elif type(atom) is StateValueEqualToMixed:
+			result = self.check_atom_truth_value(atom, value, atom_sub_index)
 
 		final_verdict = self._formula.verdict
 

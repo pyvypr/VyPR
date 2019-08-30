@@ -264,9 +264,14 @@ def consumption_thread_function(verification_obj):
 
 										atom_index = atoms.index(atom)
 
-										new_monitor.atom_to_observation[atom_index] = monitor.atom_to_observation[atom_index]
-										new_monitor.atom_to_program_path[atom_index] = monitor.atom_to_program_path[atom_index]
-										new_monitor.atom_to_state_dict[atom_index] = monitor.atom_to_state_dict[atom_index]
+										for sub_index in monitor.atom_to_observation[atom_index].keys():
+											new_monitor.atom_to_observation[atom_index][sub_index] = monitor.atom_to_observation[atom_index][sub_index]
+
+										for sub_index in monitor.atom_to_program_path[atom_index].keys():
+											new_monitor.atom_to_program_path[atom_index][sub_index] = monitor.atom_to_program_path[atom_index][sub_index]
+
+										for sub_index in monitor.atom_to_state_dict[atom_index].keys():
+											new_monitor.atom_to_state_dict[atom_index][sub_index] = monitor.atom_to_state_dict[atom_index][sub_index]
 
 					elif len(monitor._monitor_instantiation_time) == bind_variable_index:
 						vypr_output("    updating existing monitor timestamp sequence")
@@ -286,34 +291,29 @@ def consumption_thread_function(verification_obj):
 		if instrument_type == "instrument":
 
 			static_qd_indices = top_pair[2]
-			bind_variable_indices = top_pair[3]
-			atom_indices = top_pair[4]
-			instrumentation_set_indices = top_pair[5]
-			instrumentation_point_db_ids = top_pair[6]
-			observed_value = top_pair[7]
-			thread_id = top_pair[8]
+			atom_index = top_pair[3]
+			atom_sub_index = top_pair[4]
+			instrumentation_point_db_ids = top_pair[5]
+			observed_value = top_pair[6]
+			thread_id = top_pair[7]
 			try:
-				state_dict = top_pair[9]
+				state_dict = top_pair[8]
 			except:
 				# instrument isn't from a transition measurement
 				state_dict = None
 
 			vypr_output("consuming data from an instrument in thread %i" % thread_id)
 
-			lists = zip(static_qd_indices, bind_variable_indices, atom_indices, instrumentation_set_indices, instrumentation_point_db_ids)
+			lists = zip(static_qd_indices, instrumentation_point_db_ids)
 
 			for values in lists:
 
 				static_qd_index = values[0]
-				bind_variable_index = values[1]
-				atom_index = values[2]
-				instrumentation_set_index = values[3]
-				instrumentation_point_db_id = values[4]
+				instrumentation_point_db_id = values[1]
 
 				vypr_output("binding space index", static_qd_index)
-				vypr_output("variable index", bind_variable_index)
 				vypr_output("atom_index", atom_index)
-				vypr_output("instrumentation set index", instrumentation_set_index)
+				vypr_output("atom_sub_index", atom_sub_index)
 				vypr_output("instrumentation point db id", instrumentation_point_db_id)
 				vypr_output("observed value", observed_value)
 				vypr_output("state dictionary", state_dict)
@@ -323,7 +323,7 @@ def consumption_thread_function(verification_obj):
 				# update all monitors associated with static_qd_index
 				for (n, monitor) in enumerate(static_qd_to_monitors[static_qd_index]):
 					# checking for previous observation of the atom is done by the monitor's internal logic
-					monitor.process_atom_and_value(instrumentation_atom, observed_value, atom_index,
+					monitor.process_atom_and_value(instrumentation_atom, observed_value, atom_index, atom_sub_index,
 						inst_point_id=instrumentation_point_db_id, program_path=program_path, state_dict=state_dict)
 
 		# set the task as done
