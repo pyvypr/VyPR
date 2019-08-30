@@ -233,16 +233,20 @@ def get_instrumentation_points_from_comp_sequence(value_from_binding, moves):
 	"""
 	for move in moves:
 		if type(move) is NextStaticTransition:
+			print("...moving to next transition that operates on %s" % move._operates_on)
 			calls = []
 			if type(value_from_binding) is CFGVertex:
+				print("traversing from vertex")
 				scfg.next_calls(value_from_binding, move._operates_on, calls, marked_vertices=[])
 			elif type(value_from_binding) is CFGEdge:
 				scfg.next_calls(value_from_binding._target_state, move._operates_on, calls, marked_vertices=[])
 			instrumentation_points = calls
-		elif type(move) is SourceStaticState:
-			instrumentation_points = [value_from_binding]
-		elif type(move) is DestinationStaticState:
-			instrumentation_points = [value_from_binding]
+			print("calls list is", instrumentation_points)
+		elif type(move) in [SourceStaticState, DestinationStaticState]:
+			# we don't need to do anything with these yet
+			pass
+
+	print("instrumentation points", instrumentation_points)
 
 	return instrumentation_points
 
@@ -487,6 +491,9 @@ if __name__ == "__main__":
 							lhs_instrumentation_points = get_instrumentation_points_from_comp_sequence(lhs_starting_point, lhs_moves)
 							rhs_instrumentation_points = get_instrumentation_points_from_comp_sequence(rhs_starting_point, rhs_moves)
 
+							print(lhs_instrumentation_points)
+							print(rhs_instrumentation_points)
+
 							# 0 and 1 are for lhs and rhs respectively
 							static_qd_to_point_map[m][atom_index][0] = lhs_instrumentation_points
 							static_qd_to_point_map[m][atom_index][1] = rhs_instrumentation_points
@@ -571,6 +578,7 @@ if __name__ == "__main__":
 
 								if not(point_to_triples[point].get(atom_index)):
 									point_to_triples[point][atom_index] = {}
+								if not(point_to_triples[point][atom_index].get(sub_index)):
 									point_to_triples[point][atom_index][sub_index] = []
 
 								point_to_triples[point][atom_index][sub_index].append([m, instrumentation_point_db_id])
