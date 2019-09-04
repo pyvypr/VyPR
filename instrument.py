@@ -370,7 +370,7 @@ if __name__ == "__main__":
 			reference_variables = []
 			for (formula_index, formula_structure) in enumerate(verification_conf[module][function]):
 				for var in formula_structure._bind_variables:
-					if var._treat_as_ref:
+					if hasattr(var, "_treat_as_ref") and var._treat_as_ref:
 						reference_variables.append(var._name_changed)
 
 			print("Reference variables for function '%s' are " % function, reference_variables)
