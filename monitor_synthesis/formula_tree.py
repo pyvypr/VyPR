@@ -52,7 +52,7 @@ class StateValueInInterval(Atom):
 		"""
 		Mandatory check method used by formula trees to compute truth values.
 		"""
-		return self._interval[0] <= value[self._name] <= self._interval[1]
+		return self._interval[0] <= value[0][0][self._name] <= self._interval[1]
 
 class StateValueInOpenInterval(Atom):
 	"""
@@ -80,7 +80,7 @@ class StateValueInOpenInterval(Atom):
 		"""
 		Mandatory check method used by formula trees to compute truth values.
 		"""
-		return self._interval[0] < value[self._name] < self._interval[1]
+		return self._interval[0] < value[0][0][self._name] < self._interval[1]
 
 class StateValueEqualTo(Atom):
 	"""
@@ -136,6 +136,9 @@ class StateValueEqualToMixed(Atom):
 		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
 			return None
 		else:
+			# we are actually comparing pairs, but the instrumentation point id
+			# on the right is the same so the comparison just boils down to
+			# whether the lhs of each pair is the same
 			return cummulative_state[0] == cummulative_state[1]
 
 class StateValueLengthInInterval(Atom):
@@ -163,7 +166,7 @@ class StateValueLengthInInterval(Atom):
 		"""
 		Mandatory check method used by formula trees to compute truth values.
 		"""
-		return self._interval[0] <= len(value[self._name]) <= self._interval[1]
+		return self._interval[0] <= len(value[0][0][self._name]) <= self._interval[1]
 
 class TransitionDurationInInterval(Atom):
 	"""
@@ -184,8 +187,8 @@ class TransitionDurationInInterval(Atom):
 		else:
 			return False
 
-	def check(self, duration):
-		return self._interval[0] <= duration <= self._interval[1]
+	def check(self, value):
+		return self._interval[0] <= value[0][0].total_seconds() <= self._interval[1]
 
 """
 Classes for propositional logical connectives.
