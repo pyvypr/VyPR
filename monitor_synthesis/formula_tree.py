@@ -104,7 +104,7 @@ class StateValueEqualTo(Atom):
 			return False
 
 	def check(self, value):
-		return self._value == value[self._name]
+		return self._value == value[0][0][self._name]
 
 class StateValueEqualToMixed(Atom):
 	"""
@@ -116,8 +116,6 @@ class StateValueEqualToMixed(Atom):
 		self._rhs = rhs
 		self._lhs_name = lhs_name
 		self._rhs_name = rhs_name
-		self._lhs_value = None
-		self._rhs_value = None
 		self.verdict = None
 
 	def __repr__(self):
@@ -130,32 +128,15 @@ class StateValueEqualToMixed(Atom):
 		else:
 			return False
 
-	"""
-	Mixed comparison atoms require values from multiple points at runtime.
-	Hence, we store the LHS and RHS when we receive them, each time
-	checking whether we have equality yet.
-	"""
-
-	def update(self, observation, index):
-		"""
-		For a given observation and index (0 for LHS and 1 for RHS),
-		update the atom.
-		"""
-		if index == 0:
-			self._lhs_value = observation
-		elif index == 1:
-			self._rhs_value = observation
-
-	def check(self, value, index):
+	def check(self, cummulative_state):
 		"""
 		If either the RHS or LHS are None, we don't try to reach a truth value.
 		But if they are both not equal to None, we check for equality.
 		"""
-		self.update(value, index)
-		if self._lhs_value is None or self._rhs_value is None:
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
 			return None
 		else:
-			return self._lhs_value == self._rhs_value
+			return cummulative_state[0] == cummulative_state[1]
 
 class StateValueLengthInInterval(Atom):
 	"""
@@ -557,12 +538,12 @@ class Checker(object):
 	def __repr__(self):
 		return "Monitor for formula %s:\n  timestamps: %s\n state: %s\n  verdict: %s" % (self._original_formula, str(self._monitor_instantiation_time), str(self._formula), self._formula.verdict)
 
-	def check_atom_truth_value(self, atom, value, atom_sub_index):
+	def check_atom_truth_value(self, atom, value):
 		"""
 		Given an atom, an observation and, if the atom is mixed,
 		an indication of whether the observation is for the lhs or rhs
 		"""
-		check_value = atom.check(value, atom_sub_index)
+		check_value = atom.check(value)
 		if check_value == True:
 			print("atom %s gave True" % atom)
 			result = self.check_optimised(atom)
@@ -572,7 +553,7 @@ class Checker(object):
 		elif check_value == None:
 			# mixed atoms can still be unconclusive if only part of them has been given an observation
 			# in this case, the atom maintains state so no changes are required to the formula tree
-			print("mixed atom %s is inconclusive with lhs %s and rhs %s" % (atom, atom._lhs_value, atom._rhs_value))
+			print("mixed atom %s is inconclusive" % atom)
 			result = None
 		return result
 
@@ -597,25 +578,22 @@ class Checker(object):
 			self.atom_to_state_dict[atom_index][atom_sub_index] = state_dict
 		else:
 			# the observation has already been processed - no need to do anything
+			print("value already observed - nothing to do")
 			return
 
 		initial_verdict = self._formula.verdict
 		
 		print("PROCESSING ATOM %s" % atom)
 		if type(atom) is StateValueInInterval:
-			print("processing binding %s wrt interval %s" % (value, atom._interval))
-			result = self.check_atom_truth_value(atom, value, atom_sub_index)
+			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 		elif type(atom) is TransitionDurationInInterval:
-			time_taken = value.total_seconds()
-			result = self.check_atom_truth_value(atom, time_taken, atom_sub_index)
+			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 		elif type(atom) is StateValueEqualTo:
-			print("processing state value equality for observed valued %s wrt %s" % (str(value), str(atom._value)))
-			result = self.check_atom_truth_value(atom, value, atom_sub_index)
+			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 		elif type(atom) is StateValueInOpenInterval:
-			time_taken = value.total_seconds()
-			result = self.check_atom_truth_value(atom, time_taken, atom_sub_index)
+			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 		elif type(atom) is StateValueEqualToMixed:
-			result = self.check_atom_truth_value(atom, value, atom_sub_index)
+			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 
 		final_verdict = self._formula.verdict
 

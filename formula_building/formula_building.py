@@ -133,16 +133,18 @@ class changes(object):
 	Syntactic sugar for specifications.
 	"""
 
-	def __init__(self, name_changed, after=None):
+	def __init__(self, name_changed, after=None, treat_as_ref=False):
 		self._name = None
 		self._name_changed = name_changed
 		self._required_binding = after
+		self._treat_as_ref = treat_as_ref
 
 	def complete_instantiation(self, bind_variable_name):
 		return StaticState(
 			bind_variable_name,
 			self._name_changed,
-			self._required_binding
+			self._required_binding,
+			self._treat_as_ref
 		)
 
 class calls(object):
@@ -181,11 +183,12 @@ class StaticState(object):
 	Models a state attained by the monitored program at runtime.
 	"""
 
-	def __init__(self, bind_variable_name, name_changed, uses=None):
+	def __init__(self, bind_variable_name, name_changed, uses=None, treat_as_ref=False):
 		self._bind_variable_name = bind_variable_name
 		self._name = None
 		self._name_changed = name_changed
 		self._required_binding = uses
+		self._treat_as_ref = treat_as_ref
 
 	def __call__(self, name):
 		return StateValue(self, name)

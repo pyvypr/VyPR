@@ -317,11 +317,11 @@ if __name__ == "__main__":
 		verification_import = import_asts.body[0]
 		flask_import = import_asts.body[1]
 
-		verification_import.lineno = asts.body[0].lineno
-		verification_import.col_offset = asts.body[0].col_offset
+		"""verification_import.lineno = asts.body[0].lineno
+		verification_import.col_offset = asts.body[0].col_offset"""
 
-		flask_import.lineno = asts.body[0].lineno
-		flask_import.col_offset = asts.body[0].col_offset
+		"""flask_import.lineno = asts.body[0].lineno
+		flask_import.col_offset = asts.body[0].col_offset"""
 
 		asts.body.insert(0, flask_import)
 		asts.body.insert(0, verification_import)
@@ -366,8 +366,18 @@ if __name__ == "__main__":
 				current_step.body if type(current_step) is ast.ClassDef else current_step
 			)[0]
 
+			# get all reference variables
+			reference_variables = []
+			for (formula_index, formula_structure) in enumerate(verification_conf[module][function]):
+				for var in formula_structure._bind_variables:
+					if var._treat_as_ref:
+						reference_variables.append(var._name_changed)
+
+			print("Reference variables for function '%s' are " % function, reference_variables)
+
 			# construct the scfg of the code inside the function
-			scfg = CFG()
+
+			scfg = CFG(reference_variables=reference_variables)
 			scfg_vertices = scfg.process_block(function_def.body)
 
 			top_level_block = function_def.body
@@ -539,6 +549,8 @@ if __name__ == "__main__":
 						col_offset = instruction.col_offset
 
 						index_in_block = instruction._parent_body.index(instruction)
+
+						instrument_ast.lineno = instruction._parent_body[0].lineno
 
 						# insert triggers before the things that will be measured
 						instruction._parent_body.insert(index_in_block, instrument_ast)
@@ -853,8 +865,8 @@ if __name__ == "__main__":
 								exit()
 							instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
 							instrument_ast = ast.parse(instrument_code).body[0]
-							instrument_ast.lineno = vertex_information[1]._parent_body[0].lineno
-							instrument_ast.col_offset = vertex_information[1]._parent_body[0].col_offset
+							"""instrument_ast.lineno = vertex_information[1]._parent_body[0].lineno
+							instrument_ast.col_offset = vertex_information[1]._parent_body[0].col_offset"""
 							index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1])
 							vertex_information[1]._parent_body.insert(index_in_parent, instrument_ast)
 							print("Branch recording instrument placed")
@@ -886,8 +898,8 @@ if __name__ == "__main__":
 								exit()
 							instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
 							instrument_code_ast = ast.parse(instrument_code).body[0]
-							instrument_code_ast.lineno = vertex_information[1].lineno+1
-							instrument_code_ast.col_offset = vertex_information[1].col_offset
+							"""instrument_code_ast.lineno = vertex_information[1].lineno+1
+							instrument_code_ast.col_offset = vertex_information[1].col_offset"""
 
 							index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1])+1
 							print(vertex_information[1]._parent_body)
@@ -907,8 +919,8 @@ if __name__ == "__main__":
 								exit()
 							instrument_code_inside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
 							instrument_inside_loop_ast = ast.parse(instrument_code_inside_loop).body[0]
-							instrument_inside_loop_ast.lineno = vertex_information[1].lineno
-							instrument_inside_loop_ast.col_offset = vertex_information[1].col_offset
+							"""instrument_inside_loop_ast.lineno = vertex_information[1].lineno
+							instrument_inside_loop_ast.col_offset = vertex_information[1].col_offset"""
 
 							condition_dict = {
 								"serialised_condition" : pickle.dumps(vertex_information[4])
@@ -921,8 +933,8 @@ if __name__ == "__main__":
 								exit()
 							instrument_code_outside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
 							instrument_outside_loop_ast = ast.parse(instrument_code_outside_loop).body[0]
-							instrument_outside_loop_ast.lineno = vertex_information[3].lineno+1
-							instrument_outside_loop_ast.col_offset = vertex_information[3].col_offset
+							"""instrument_outside_loop_ast.lineno = vertex_information[3].lineno+1
+							instrument_outside_loop_ast.col_offset = vertex_information[3].col_offset"""
 
 							# insert at beginning of loop body
 							inside_index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1])
@@ -945,17 +957,27 @@ if __name__ == "__main__":
 				threading_import_ast = ast.parse(thread_id_capture).body[0]
 				thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
 				start_ast = ast.parse(start_instrument).body[0]
-	
+
+				print("inserting scope instruments with line number ", function_def.body[0].lineno)
+
+				print(function_def.body)
+
 				threading_import_ast.lineno = function_def.body[0].lineno
+				thread_id_capture_ast.lineno = function_def.body[0].lineno
+				start_ast.lineno = function_def.body[0].lineno
+	
+				"""threading_import_ast.lineno = function_def.body[0].lineno
 				threading_import_ast.col_offset = function_def.body[0].col_offset
 				thread_id_capture_ast.lineno = function_def.body[0].lineno
 				thread_id_capture_ast.col_offset = function_def.body[0].col_offset
 				start_ast.lineno = function_def.body[0].lineno
-				start_ast.col_offset = function_def.body[0].col_offset
+				start_ast.col_offset = function_def.body[0].col_offset"""
 	
 				function_def.body.insert(0, start_ast)
 				function_def.body.insert(0, thread_id_capture_ast)
 				function_def.body.insert(0, threading_import_ast)
+
+				print(function_def.body)
 							
 				# insert the end instrument before every return statement
 				for end_vertex in scfg.return_statements:
@@ -963,8 +985,10 @@ if __name__ == "__main__":
 										% (verification_instruction, formula_hash, instrument_function_qualifier, formula_hash)
 					end_ast = ast.parse(end_instrument).body[0]
 
-					end_ast.lineno = end_vertex._previous_edge._instruction.lineno
-					end_ast.col_offset = end_vertex._previous_edge._instruction.col_offset
+					"""end_ast.lineno = end_vertex._previous_edge._instruction.lineno
+					end_ast.col_offset = end_vertex._previous_edge._instruction.col_offset"""
+
+					end_ast.lineno = end_vertex._previous_edge._instruction._parent_body[-1].lineno
 
 					print("inserting end instrument at line %i" % end_ast.lineno)
 
@@ -1026,7 +1050,9 @@ if __name__ == "__main__":
 
 				print("-"*50)
 
-		instrumented_code = compile(asts, "<ast>", "exec")
+		backup_file_name = "%s.py.inst" % file_name_without_extension
+
+		instrumented_code = compile(asts, backup_file_name, "exec")
 
 		# append an underscore to indicate that it's instrumented - removed for now
 		instrumented_file_name = "%s.pyc" % file_name_without_extension

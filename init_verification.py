@@ -321,10 +321,14 @@ def consumption_thread_function(verification_obj):
 				instrumentation_atom = atoms[atom_index]
 
 				# update all monitors associated with static_qd_index
-				for (n, monitor) in enumerate(static_qd_to_monitors[static_qd_index]):
-					# checking for previous observation of the atom is done by the monitor's internal logic
-					monitor.process_atom_and_value(instrumentation_atom, observed_value, atom_index, atom_sub_index,
-						inst_point_id=instrumentation_point_db_id, program_path=program_path, state_dict=state_dict)
+				if static_qd_to_monitors.get(static_qd_index):
+					print("processing %i existing monitors" % len(static_qd_to_monitors[static_qd_index]))
+					for (n, monitor) in enumerate(static_qd_to_monitors[static_qd_index]):
+						print("processing")
+						print(monitor._state._state)
+						# checking for previous observation of the atom is done by the monitor's internal logic
+						monitor.process_atom_and_value(instrumentation_atom, observed_value, atom_index, atom_sub_index,
+							inst_point_id=instrumentation_point_db_id, program_path=program_path, state_dict=state_dict)
 
 		# set the task as done
 		verification_obj.consumption_queue.task_done()

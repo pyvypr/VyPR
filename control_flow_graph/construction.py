@@ -112,7 +112,7 @@ class CFGVertex(object):
 	a name is mapped in Python code is changed.
 	"""
 
-	def __init__(self, entry=None, path_length=None, structure_obj=None):
+	def __init__(self, entry=None, path_length=None, structure_obj=None, reference_variables=[]):
 		"""
 		Given the name changed in the state this vertex represents,
 		store it.
@@ -132,7 +132,8 @@ class CFGVertex(object):
 					self._name_changed = [get_attr_name_string(entry.targets[0])] + get_function_name_strings(entry)
 				# TODO: include case where the expression on the right hand side of the assignment is an expression with a call
 			elif type(entry) is ast.Expr and type(entry.value) is ast.Call:
-				self._name_changed = get_function_name_strings(entry.value)
+				# if there are reference variables, we include them as possibly changed
+				self._name_changed = get_function_name_strings(entry.value) + (reference_variables if len(entry.value.args) > 0 else [])
 			elif type(entry) is ast.Assign:
 				self._name_changed = [get_attr_name_string(entry.targets[0])]
 			elif type(entry) is ast.Return:
@@ -208,15 +209,15 @@ class CFG(object):
 	This class represents a symbolic control flow graph.
 	"""
 
-	def __init__(self):
+	def __init__(self, reference_variables=[]):
 		self.vertices = []
 		self.edges = []
 		empty_vertex = CFGVertex()
 		self.vertices.append(empty_vertex)
 		self.starting_vertices = empty_vertex
 		self.return_statements = []
-		
 		self.branch_initial_statements = []
+		self.reference_variables = reference_variables
 
 	def process_block(self, block, starting_vertices=None, condition=[], input_variables=[]):
 		"""
@@ -250,7 +251,7 @@ class CFG(object):
 					vertex.add_outgoing_edge(new_edge)
 
 				# create a new vertex for the state created here
-				new_vertex = CFGVertex(entry, path_length=path_length)
+				new_vertex = CFGVertex(entry, path_length=path_length, reference_variables=self.reference_variables)
 
 				self.vertices.append(new_vertex)
 				self.edges += new_edges
