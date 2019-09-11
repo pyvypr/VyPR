@@ -22,6 +22,9 @@ import inspect
 import json
 import argparse
 
+# for now, we remove VyPR from the first path to look in for modules
+sys.path[0] = sys.path[0].replace("/VyPR", "")
+
 # get the formula building functions before we evaluate the configuration code
 from VyPR.formula_building.formula_building import *
 from VyPR.monitor_synthesis.formula_tree import lnot
