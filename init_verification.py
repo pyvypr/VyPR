@@ -16,13 +16,13 @@ import json
 import flask
 import pprint
 
-sys.path.append("VyPR/")
+#sys.path.append("VyPR/")
 
-from monitor_synthesis import formula_tree
-from monitor_synthesis.formula_tree import lnot
-from formula_building.formula_building import *
-from verdict_reports import VerdictReport
-from control_flow_graph.construction import CFGEdge, CFGVertex
+from VyPR.monitor_synthesis import formula_tree
+from VyPR.monitor_synthesis.formula_tree import lnot
+from VyPR.formula_building.formula_building import *
+from VyPR.verdict_reports import VerdictReport
+from VyPR.control_flow_graph.construction import CFGEdge, CFGVertex
 
 VERDICT_SERVER_URL = None
 VYPR_OUTPUT_VERBOSE = True

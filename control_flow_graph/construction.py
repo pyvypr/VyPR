@@ -26,9 +26,9 @@ import threading
 import Queue
 
 from graphviz import Digraph
-sys.path.append(".")
-from monitor_synthesis import formula_tree
-from formula_building.formula_building import *
+#sys.path.append(".")
+from VyPR.monitor_synthesis import formula_tree
+from VyPR.formula_building.formula_building import *
 
 vertices = []
 

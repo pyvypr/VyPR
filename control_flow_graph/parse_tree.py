@@ -13,8 +13,9 @@ This module contains the classes necessary to represent a parse tree wrt a gramm
 We use this to build parse trees of paths wrt grammars derived from SCFGs.
 """
 
-from construction import CFGVertex, CFGEdge
 import pprint
+
+from VyPR.control_flow_graph.construction import CFGVertex, CFGEdge
 
 class ParseTreeVertex(object):
 	"""

@@ -23,9 +23,9 @@ import json
 import argparse
 
 # get the formula building functions before we evaluate the configuration code
-from formula_building.formula_building import *
-from monitor_synthesis.formula_tree import lnot
-from control_flow_graph.construction import *
+from VyPR.formula_building.formula_building import *
+from VyPR.monitor_synthesis.formula_tree import lnot
+from VyPR.control_flow_graph.construction import *
 
 VERDICT_SERVER_URL = None
 VERBOSE = False

@@ -19,10 +19,11 @@ Atoms are generated once states or transitions have been described by calling
 
 """
 
-from monitor_synthesis import formula_tree
 import inspect
 # be careful with versions here...
 from collections import OrderedDict
+
+from VyPR.monitor_synthesis import formula_tree
 
 """
 General structure-building classes and methods.
