@@ -407,10 +407,10 @@ class CFG(object):
 
 				# add the branches to the graph
 				final_conditional_vertices = []
-				for pair in pairs:
-					final_vertices = self.process_block(pair[1], current_vertices, condition + pair[0], input_variables=input_variables_copy)
+				for (n, pair) in enumerate(pairs):
+					final_vertices = self.process_block(pair[1], current_vertices, pair[0], input_variables=input_variables_copy)
 					final_conditional_vertices += final_vertices
-					self.branch_initial_statements.append(["conditional", pair[1][0], pair[0]])
+					self.branch_initial_statements.append(["conditional", pair[1][0], n])
 					#vertices += final_vertices
 
 				# the disjunction of formulas that could each have been followed for control flow to continue after the if-statement
@@ -499,7 +499,7 @@ class CFG(object):
 				# first process entry.body
 				final_try_catch_vertices = []
 
-				final_vertices = self.process_block(entry.body, current_vertices, condition + ['try-catch-main'], input_variables=input_variables_copy)
+				final_vertices = self.process_block(entry.body, current_vertices, ['try-catch-main'], input_variables=input_variables_copy)
 				final_try_catch_vertices += final_vertices
 
 				# now process the except handlers - eventually with some identifier for each branch
@@ -507,7 +507,7 @@ class CFG(object):
 				for block_item in blocks:
 					#print(block_item)
 					#print("="*10)
-					final_vertices = self.process_block(block_item, current_vertices, condition + ['try-catch-handler'], input_variables=input_variables_copy)
+					final_vertices = self.process_block(block_item, current_vertices, ['try-catch-handler'], input_variables=input_variables_copy)
 					final_try_catch_vertices += final_vertices
 					#print("="*10)
 
@@ -573,11 +573,11 @@ class CFG(object):
 					additional_input_variables = [loop_variable.id]
 				elif type(loop_variable) is ast.Tuple:
 					additional_input_variables = map(lambda item : item.id, loop_variable.elts)
-				final_vertices = self.process_block(entry.body, current_vertices, condition + ['for'], input_variables=input_variables_copy + additional_input_variables)
+				final_vertices = self.process_block(entry.body, current_vertices, ['enter-loop'], input_variables=input_variables_copy + additional_input_variables)
 
 				# for a for loop, we add a path recording instrument at the beginning of the loop body
 				# and after the loop body
-				self.branch_initial_statements.append(["loop", entry.body[0], entry.iter, entry, formula_tree.lnot(entry.iter)])
+				self.branch_initial_statements.append(["loop", entry.body[0], "enter-loop", entry, "end-loop"])
 
 				# add 2 edges from the final_vertex - one going back to the pre-loop vertex
 				# with the positive condition, and one going to the post loop vertex.
@@ -616,7 +616,7 @@ class CFG(object):
 
 				# this should be updated at some point to include empty pre and post-loop vertices like in the for loop clause above
 
-				final_vertices = self.process_block(entry.body, current_vertices, condition + ['while'], input_variables=input_variables_copy)
+				final_vertices = self.process_block(entry.body, current_vertices, ['while'], input_variables=input_variables_copy)
 
 				for final_vertex in final_vertices:
 					for base_vertex in current_vertices:

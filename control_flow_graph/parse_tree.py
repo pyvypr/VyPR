@@ -214,7 +214,6 @@ class ParseTree(object):
 
 				all_paths_copy[n] = all_paths_copy[n][:trim_index]
 
-			print("trimmed paths:")
 			unique_paths = []
 			# form unique set
 			for path in all_paths_copy:
