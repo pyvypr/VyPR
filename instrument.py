@@ -841,11 +841,17 @@ if __name__ == "__main__":
 
 
 				if EXPLANATION:
+					print("="*100)
+					print("INSTRUMENTING FOR EXPLANATION")
+
+					pprint.pprint(scfg.branch_initial_statements)
+
 					# if explanation was turned on in the configuration file, insert path instruments.
 
 					# insert path recording instruments - these don't depend on the formula being checked so
 					# this is done independent of binding space computation
 					for vertex_information in scfg.branch_initial_statements:
+						print("-"*100)
 						if vertex_information[0] in ['conditional', 'try-catch']:
 							if vertex_information[0] == 'conditional':
 								print("Placing branch recording instrument for conditional with first instruction %s in block" % vertex_information[1])
@@ -873,9 +879,27 @@ if __name__ == "__main__":
 							index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1])
 							vertex_information[1]._parent_body.insert(index_in_parent, instrument_ast)
 							print("Branch recording instrument placed")
+						elif vertex_information[0] == "conditional-no-else":
+							# no else was present in the conditional, so we add a path recording instrument
+							# to the else block
+							print("Placing branch recording instrument for conditional with no else")
+							# send branching condition to verdict server, take the ID from the response and use it in the path recording instruments.
+							condition_dict = {
+								"serialised_condition" : pickle.dumps(vertex_information[2])
+							}
+							# if the condition already exists in the database, the verdict server will return the existing ID
+							try:
+								branching_condition_id = int(post_to_verdict_server("store_branching_condition/", data=json.dumps(condition_dict)))
+							except:
+								print("There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
+								exit()
+							instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
+							instrument_ast = ast.parse(instrument_code).body[0]
+							vertex_information[1].orelse.insert(0, instrument_ast)
+							print("Branch recording instrument placed")
 						elif vertex_information[0] in ['post-conditional', 'post-try-catch']:
 							if vertex_information[0] == 'post-conditional':
-								print("processing post conditional path instrument")
+								print("Processing post conditional path instrument")
 								print(vertex_information)
 								# need this to decide if we've left a conditional, since paths lengths reset after conditionals
 								print("Placing branch recording instrument for end of conditional at %s - %i in parent block - line no %i" %\
@@ -885,7 +909,7 @@ if __name__ == "__main__":
 									"serialised_condition" : "conditional exited"
 								}
 							else:
-								print("processing post try-catch path instrument")
+								print("Processing post try-catch path instrument")
 								print(vertex_information)
 								# need this to decide if we've left a conditional, since paths lengths reset after conditionals
 								print("Placing branch recording instrument for end of try-catch at %s - %i in parent block - line no %i" %\
@@ -947,6 +971,8 @@ if __name__ == "__main__":
 							vertex_information[1]._parent_body.insert(inside_index_in_parent, instrument_inside_loop_ast)
 							vertex_information[3]._parent_body.insert(outside_index_in_parent, instrument_outside_loop_ast)
 							print("Branch recording instrument for conditional placed")
+
+					print("="*100)
 			
 				# finally, insert an instrument at the beginning to tell the monitoring thread that a new call of the function has started
 				# and insert one at the end to signal a return

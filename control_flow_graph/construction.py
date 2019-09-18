@@ -420,6 +420,8 @@ class CFG(object):
 
 				# we include the vertex before the conditional, only if there was no else
 				if not(final_else_is_present):
+					# we add a branching statement - the branch number is just the number of pairs we found
+					self.branch_initial_statements.append(["conditional-no-else", entry, len(pairs)])
 					current_vertices = final_conditional_vertices + current_vertices
 				else:
 					current_vertices = final_conditional_vertices
