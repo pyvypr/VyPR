@@ -14,8 +14,15 @@ We use this to build parse trees of paths wrt grammars derived from SCFGs.
 """
 
 import pprint
+from graphviz import Digraph
 
 from VyPR.control_flow_graph.construction import CFGVertex, CFGEdge
+
+def scfg_element_to_dot(scfg_obj):
+	"""
+	Gives a string that can be used by dot for drawing parse trees.
+	"""
+	return str(scfg_obj).replace("<", "").replace(">", "")
 
 class ParseTreeVertex(object):
 	"""
@@ -37,7 +44,8 @@ class ParseTree(object):
 	"""
 	def __init__(self, path=None, rules=None, starting_vertex=None, empty=False, parametric=False):
 		if not(empty):
-			print("building parse tree for path %s" % str(path))
+			print("building parse tree for path with length %i" % len(path))
+			print(path)
 			self._root_vertex = ParseTreeVertex(starting_vertex)
 			self._vertices = [self._root_vertex]
 			self._rules = rules
@@ -70,9 +78,13 @@ class ParseTree(object):
 			progress_length = len(self._path_progress)
 			first_relevant_symbol = self._target_path[progress_length]
 			rule_to_use = rules[0]
+			rule_found = False
 			for rule in rules:
 				if rule[0] == first_relevant_symbol:
 					rule_to_use = rule
+					rule_found = True
+			if not(rule_found):
+				print("no rule found at vertex %s to generate %s...  this is an error and will give incomplete comparison." % (vertex._symbol, first_relevant_symbol))
 		else:
 			rule_to_use = rules[0]
 
@@ -91,6 +103,10 @@ class ParseTree(object):
 				result = self.expand_vertex(child_vertex)
 				if result == False:
 					return False
+			else:
+				print("reached None - path generated of length %i is" % len(self._path_progress))
+				print(self._path_progress)
+				print("-"*100)
 
 	def expand_vertex_parametric(self, vertex):
 		"""
@@ -187,7 +203,7 @@ class ParseTree(object):
 
 		for tree in other_trees:
 			for (n, path) in enumerate(all_paths_copy):
-				print("following path %s" % path)
+				#print("following path %s" % path)
 				# follow the path through tree
 				# as soon as we can't follow it any further, cut the rest off the path
 				current_parse_tree_vertex = tree._root_vertex
@@ -209,7 +225,7 @@ class ParseTree(object):
 							break
 					else:
 						# do nothing - we exhausted the path without encountering disagreement
-						print("path exhausted without disagreement")
+						#print("path exhausted without disagreement")
 						trim_index = len(path)
 
 				all_paths_copy[n] = all_paths_copy[n][:trim_index]
@@ -316,3 +332,22 @@ class ParseTree(object):
 			new_parse_tree._vertices.append(new_child)
 			current_new_vertex.add_child(new_child)
 			self.new_parse_tree_rooted_at_vertex(new_parse_tree, child, new_child)
+
+	def write_to_file(self, file_name):
+		"""
+		Given a parse tree for a path wrt a scfg, write a dot file.
+		"""
+		graph = Digraph()
+		graph.attr("graph", splines="true", fontsize="10")
+		shape = "rectangle"
+		for vertex in self._vertices:
+			#print(str(vertex._symbol))
+			colour = "black"
+			graph.node(str(id(vertex)), scfg_element_to_dot(vertex._symbol), shape=shape, color=colour)
+			for child in vertex._children:
+				graph.edge(
+					str(id(vertex)),
+					str(id(child))
+				)
+		graph.render(file_name)
+		print("Written parse tree to file '%s'." % file_name)

@@ -707,6 +707,18 @@ class CFG(object):
 				for edge in vertex.edges:
 					final_map[vertex].append([edge, edge._target_state])
 
+			elif vertex._name_changed == ["post-conditional"]:
+
+				# check whether we're inside a loop
+				if vertex.edges[0]._target_state._name_changed == ["loop"]:
+					# if we're inside a loop, then we need to include the post-loop edge
+					final_map[vertex] = [
+						[vertex.edges[0], vertex.edges[0]._target_state],
+						[vertex.edges[1]]
+					]
+				else:
+					final_map[vertex] = [[vertex.edges[0], vertex.edges[0]._target_state]]
+
 			else:
 
 				if vertex.edges[0]._target_state._name_changed in [["post-conditional"], ["post-loop"], ["post-try-catch"]]:
