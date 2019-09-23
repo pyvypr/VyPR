@@ -759,7 +759,8 @@ if __name__ == "__main__":
 
 							if type(atom) is formula_tree.TransitionDurationInInterval:
 
-								instrument_point_transition(atom, point, atom_index, atom_sub_index, instrumentation_point_db_ids)
+								instrument_point_transition(atom, point, binding_space_indices, atom_index,
+										atom_sub_index, instrumentation_point_db_ids)
 
 							elif type(atom) in [formula_tree.StateValueInInterval, formula_tree.StateValueEqualTo, formula_tree.StateValueInOpenInterval]:
 
