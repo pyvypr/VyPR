@@ -77,7 +77,8 @@ def send_verdict_report(function_name, time_of_call, program_path, verdict_repor
 							verdict[2],
 							verdict[3],
 							verdict[4],
-							verdict[5]
+							verdict[5],
+							verdict[6]
 						],
 						default=to_timestamp
 					),
@@ -170,6 +171,7 @@ def consumption_thread_function(verification_obj):
 									monitor.atom_to_observation,
 									monitor.atom_to_program_path,
 									atoms.index(monitor.collapsing_atom),
+									monitor.collapsing_atom_sub_index,
 									monitor.atom_to_state_dict
 								)
 

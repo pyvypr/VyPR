@@ -21,7 +21,7 @@ class VerdictReport(object):
 	def add_verdict(
 				self, bind_space_index, verdict, atom_to_value_map,
 				atom_to_program_path_map, collapsing_atom_index,
-				atom_to_state_dict_map
+				collapsing_atom_sub_index, atom_to_state_dict_map
 		):
 		self.map_lock.acquire()
 		#print("ADDING VERDICT FOR QD INDEX %i" % bind_space_index)
@@ -33,6 +33,7 @@ class VerdictReport(object):
 					atom_to_value_map,
 					atom_to_program_path_map,
 					collapsing_atom_index,
+					collapsing_atom_sub_index,
 					atom_to_state_dict_map
 				)]
 		else:
@@ -43,6 +44,7 @@ class VerdictReport(object):
 					atom_to_value_map,
 					atom_to_program_path_map,
 					collapsing_atom_index,
+					collapsing_atom_sub_index,
 					atom_to_state_dict_map
 				)
 			)
