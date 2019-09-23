@@ -410,6 +410,24 @@ class Duration(object):
 		else:
 			raise Exception("Duration predicate wasn't defined properly.")
 
+	def lessThan(self, value):
+		"""
+		Generates an atom.
+		This is, for now, reserved for comparison of duration to other measurable quantities.
+		"""
+		if type(value) is StateValue:
+			return formula_tree.TransitionDurationLessThanStateValueMixed(
+					self._transition,
+					value._state,
+					value._name
+				)
+		elif type(value) is Duration:
+			return formula_tree.TransitionDurationLessThanTransitionDurationMixed(
+					self._transition,
+					value._transition,
+				)
+
+
 def composition_sequence_from_value(sequence, current_operator):
 
 	while not(type(current_operator) in [StaticState, StaticTransition]):
@@ -442,7 +460,9 @@ def derive_composition_sequence(atom):
 	else:
 		current_operator = atom
 
-	if type(atom) == formula_tree.StateValueEqualToMixed:
+	if type(atom) in [formula_tree.StateValueEqualToMixed,
+					formula_tree.TransitionDurationLessThanTransitionDurationMixed,
+					formula_tree.TransitionDurationLessThanStateValueMixed]:
 
 		# atom is mixed - two composition sequences
 

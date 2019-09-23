@@ -187,6 +187,71 @@ class TransitionDurationInInterval(Atom):
 	def check(self, value):
 		return self._interval[0] <= value[0][0].total_seconds() <= self._interval[1]
 
+class TransitionDurationLessThanTransitionDurationMixed(Atom):
+	"""
+	This class models the atom (duration(t1) < duration(t2))
+	for v the duration of another transition.
+	"""
+
+	def __init__(self, lhs_transition, rhs_transition):
+		self._lhs = lhs_transition
+		self._rhs = rhs_transition
+		self.verdict = None
+
+	def __repr__(self):
+		return "d(%s) < d(%s)" % (self._lhs, self._rhs)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TransitionDurationLessThanTransitionDurationMixed:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs)
+		else:
+			return False
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check for equality.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+			return cummulative_state[0][0] < cummulative_state[1][0]
+
+
+class TransitionDurationLessThanStateValueMixed(Atom):
+	"""
+	This class models the atom (duration(t) < v)
+	for v a value given by a state.
+	"""
+
+	def __init__(self, transition, state, name):
+		self._lhs = transition
+		self._rhs = state
+		self._rhs_name = name
+		self.verdict = None
+
+	def __repr__(self):
+		return "d(%s) < (%s)(%s)" % (self._lhs, self._rhs, self._rhs_name)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TransitionDurationLessThanStateValueMixed:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs and
+				self._rhs_name == other_atom._rhs_name)
+		else:
+			return False
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check for equality.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+			return cummulative_state[0][0].total_seconds() < cummulative_state[1][0][self._rhs_name]
+
 """
 Classes for propositional logical connectives.
 """
@@ -461,6 +526,7 @@ class Checker(object):
 		self.atom_to_program_path = {}
 		self.atom_to_state_dict = {}
 		self.collapsing_atom = None
+		self.collapsing_atom_sub_index = None
 		# we use a tuple to record the instantiation time for each encountered bind variable
 		self._monitor_instantiation_time = (datetime.datetime.now(),)
 
@@ -584,7 +650,10 @@ class Checker(object):
 		initial_verdict = self._formula.verdict
 		
 		print("PROCESSING ATOM %s" % atom)
-		if type(atom) is StateValueInInterval:
+
+		result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
+
+		"""if type(atom) is StateValueInInterval:
 			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 		elif type(atom) is TransitionDurationInInterval:
 			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
@@ -594,12 +663,15 @@ class Checker(object):
 			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 		elif type(atom) is StateValueEqualToMixed:
 			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
+		elif type(atom) is StateValueEqualToMixed:
+			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])"""
 
 		final_verdict = self._formula.verdict
 
 		if initial_verdict != final_verdict:
 			# for each monitor, this branch can only ever be traversed once
 			self.collapsing_atom = atom
+			self.collapsing_atom_sub_index = atom_sub_index
 
 		return result
 
