@@ -84,6 +84,11 @@ class Forall(object):
 		# defined by calling Formula
 		self._formula = None
 
+		# this is set to True when self.Formula() is called
+		# it's used to decide whether arithmetic operations should be
+		# added to atoms' stacks or not, to prevent double evaluation
+		self._instantiation_complete = False
+
 	def __repr__(self):
 		if self._formula is None:
 			return "Forall(%s)" % self.bind_variables
@@ -114,10 +119,13 @@ class Forall(object):
 		self._formula = formula_lambda
 		# generate instantiated formula to compute its atoms
 		self._formula_atoms =\
-			formula_tree.get_positive_formula_alphabet(self.get_formula_instance())
+			formula_tree.get_positive_formula_alphabet(self.get_formula_instance(
+				first_time=True
+			))
+		self._instantiation_complete = True
 		return self
 
-	def get_formula_instance(self):
+	def get_formula_instance(self, first_time=False):
 		"""
 		Instantiate the formula using the lambda stored.
 		"""
@@ -127,7 +135,17 @@ class Forall(object):
 			lambda arg_name : self.bind_variables[arg_name],
 			argument_names
 		)
-		return self._formula(*bind_variables)
+		if first_time:
+			# enable "_arithmetic_build" flag in bind variables
+			# so arithmetic operations are added
+			for bind_variable in bind_variables:
+				bind_variable._arithmetic_build = True
+		formula = self._formula(*bind_variables)
+		# switch off arithmetic build flags
+		if first_time:
+                        for bind_variable in bind_variables:
+                                bind_variable._arithmetic_build	= False
+		return formula
 
 class changes(object):
 	"""
@@ -190,6 +208,10 @@ class StaticState(object):
 		self._name_changed = name_changed
 		self._required_binding = uses
 		self._treat_as_ref = treat_as_ref
+		# this will be added to if a function is applied
+		# to the measurement in the PyCFTL specification.
+		self._arithmetic_stack = []
+		self._arithmetic_build = False
 
 	def __call__(self, name):
 		return StateValue(self, name)
@@ -290,6 +312,37 @@ class StateValue(object):
 
 	def length(self):
 		return formula_tree.StateValueLength(self)
+
+	"""
+	Arithmetic overloading is useful for mixed atoms
+	when observed quantities are being compared to each other.
+	"""
+
+	def __mul__(self, value):
+		"""
+		Given a constant (we assume this for now),
+		add a lambda to the arithmetic stack so it can be applied
+		later when values are checked.
+		"""
+		if self._state._arithmetic_build:
+			print("EVALUATING MULTIPLICATION OF STATE VALUE")
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticMultiply(value))
+		return self
+
+	def __add__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticAdd(value))
+                return self
+
+	def __sub__(self, value):
+		if self._state._arithmetic_build:
+                	self._state._arithmetic_stack.append(formula_tree.ArithmeticSubtract(value))
+                return self
+
+	def __truediv__(self, value):
+		if self._state._arithmetic_build:
+                	self._state._arithmetic_stack.append(formula_tree.ArithmeticTrueDivide(value))
+                return self
 
 
 class StaticStateLength(object):

@@ -11,6 +11,48 @@ Author: Joshua Dawes - CERN, University of Manchester - joshua.dawes@cern.ch
 
 import datetime
 
+class ArithmeticMultiply(object):
+        def __init__(self, v):
+                self._v = v
+	def __repr__(self):
+		return "*%i" % self._v
+
+class ArithmeticAdd(object):
+        def __init__(self, v):
+                self._v = v
+	def __repr__(self):
+                return "+%i" % self._v
+
+class ArithmeticTrueDivide(object):
+        def __init__(self, v):
+                self._v = v
+	def __repr__(self):
+                return "/%i" % self._v
+
+class ArithmeticSubtract(object):
+        def __init__(self, v):
+                self._v = v
+	def __repr__(self):
+                return "-%i" % self._v
+
+def apply_arithmetic_stack(stack, observation):
+	"""
+	Given a list of lambda functions, iteratively apply them to the observation
+	to yield a final value.
+	"""
+	print("Observed value before arithmetic stack is %i" % observation)
+	current_value = observation
+	for f in stack:
+		if f.__class__.__name__ == ArithmeticMultiply.__name__:
+			current_value *= f._v
+		elif f.__class__.__name__ == ArithmeticAdd.__name__:
+			current_value += f._v
+		elif f.__class__.__name__ == ArithmeticTrueDivide.__name__:
+			current_value /= f._v
+		elif f.__class__.__name__ == ArithmeticSubtract.__name__:
+			current_value -= f._v
+	print("Observed value after arithmetic stack is %i" % current_value)
+	return current_value
 
 """
 Classes for atoms specific to this logic.
@@ -136,7 +178,15 @@ class StateValueEqualToMixed(Atom):
 		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
 			return None
 		else:
-			return cummulative_state[0][0] == cummulative_state[1][0]
+			lhs_with_arithmetic = apply_arithmetic_stack(
+				self._lhs.arithmetic_stack,
+				cummulative_state[0][0]
+			)
+			rhs_with_arithmetic = apply_arithmetic_stack(
+                                self._rhs.arithmetic_stack,
+                                cummulative_state[1][0]
+                       	)
+			return lhs_with_arithmetic == rhs_with_arithmetic
 
 class StateValueLengthInInterval(Atom):
 	"""
@@ -250,7 +300,11 @@ class TransitionDurationLessThanStateValueMixed(Atom):
 		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
 			return None
 		else:
-			return cummulative_state[0][0].total_seconds() < cummulative_state[1][0][self._rhs_name]
+                        rhs_with_arithmetic = apply_arithmetic_stack(
+                                self._rhs._arithmetic_stack,
+                                cummulative_state[1][0][self._rhs_name]
+                        )
+			return cummulative_state[0][0].total_seconds() < rhs_with_arithmetic
 
 """
 Classes for propositional logical connectives.

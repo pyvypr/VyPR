@@ -388,15 +388,22 @@ class PropertyMapGroup(object):
 
 		# reconstruct formula structure
 		# there's probably a better way to do this
+		print("before first evaluation")
+		print("formula being imported")
 		exec("".join(open("verification_conf.py", "r").readlines()))
+		print("formula imported")
+		print("after first evaluation")
 		index_to_hash = pickle.loads(index_to_hash_dump)
 		property_index = index_to_hash.index(property_hash)
 
 		print(function_name, property_index)
 		
 		# might just change the syntax in the verification conf file at some point to use : instead of .
+		print("before second evaluation")
 		self.formula_structure = verification_conf[module_name][function_name.replace(":", ".")][property_index]
+		print("after second evaluation")
 		print(self.formula_structure)
+		print("after formula structure output")
 		self.binding_space = pickle.loads(binding_space_dump)
 		self.static_qd_to_point_map = pickle.loads(instr_map_dump)
 		self.static_qd_to_monitors = {}
@@ -490,10 +497,13 @@ class Verification(object):
 			vypr_output("Setting up monitoring state for module/function/property triple %s, %s, %s" % (module_string, function, property_hash))
 
 			module_function_string = "%s.%s" % (module_string, function)
+			
+			print("before first evaluation")
 
 			if not(self.function_to_maps.get(module_function_string)):
 				self.function_to_maps[module_function_string] = {}
 			self.function_to_maps[module_function_string][property_hash] = PropertyMapGroup(module_string, function, property_hash)
+			print("after first evaluation")
 
 		vypr_output(self.function_to_maps)
 
