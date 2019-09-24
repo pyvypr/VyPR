@@ -486,7 +486,7 @@ class Duration(object):
 		else:
 			raise Exception("Duration predicate wasn't defined properly.")
 
-	def lessThan(self, value):
+	def __lt__(self, value):
 		"""
 		Generates an atom.
 		This is, for now, reserved for comparison of duration to other measurable quantities.
