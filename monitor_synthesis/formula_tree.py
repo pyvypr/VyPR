@@ -306,6 +306,43 @@ class TransitionDurationLessThanStateValueMixed(Atom):
                         )
 			return cummulative_state[0][0].total_seconds() < rhs_with_arithmetic
 
+class TransitionDurationLessThanStateValueLengthMixed(Atom):
+	"""
+	This class models the atom (duration(t) < v.length())
+	for v a value given by a state.
+	"""
+
+	def __init__(self, transition, state, name):
+		self._lhs = transition
+		self._rhs = state
+		self._rhs_name = name
+		self.verdict = None
+
+	def __repr__(self):
+		return "d(%s) < (%s)(%s).length()" % (self._lhs, self._rhs, self._rhs_name)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TransitionDurationLessThanStateValueLengthMixed:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs and
+				self._rhs_name == other_atom._rhs_name)
+		else:
+			return False
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check for equality.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+                        rhs_with_arithmetic = apply_arithmetic_stack(
+                                self._rhs._arithmetic_stack,
+                                cummulative_state[1][0][self._rhs_name]
+                        )
+			return cummulative_state[0][0].total_seconds() < rhs_with_arithmetic
+
 """
 Classes for propositional logical connectives.
 """

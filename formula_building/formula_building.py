@@ -475,6 +475,12 @@ class Duration(object):
 					value._state,
 					value._name
 				)
+		elif type(value) is StateValueLength:
+			return formula_tree.TransitionDurationLessThanStateValueLengthMixed(
+					self._transition,
+					value._state,
+					value._name
+				)
 		elif type(value) is Duration:
 			return formula_tree.TransitionDurationLessThanTransitionDurationMixed(
 					self._transition,
@@ -516,7 +522,8 @@ def derive_composition_sequence(atom):
 
 	if type(atom) in [formula_tree.StateValueEqualToMixed,
 					formula_tree.TransitionDurationLessThanTransitionDurationMixed,
-					formula_tree.TransitionDurationLessThanStateValueMixed]:
+					formula_tree.TransitionDurationLessThanStateValueMixed,
+					formula_tree.TransitionDurationLessThanStateValueLengthMixed]:
 
 		# atom is mixed - two composition sequences
 

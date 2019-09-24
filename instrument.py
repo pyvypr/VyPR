@@ -629,7 +629,8 @@ if __name__ == "__main__":
 
 						if type(atom) in [formula_tree.StateValueEqualToMixed,
 										formula_tree.TransitionDurationLessThanTransitionDurationMixed,
-										formula_tree.TransitionDurationLessThanStateValueMixed]:
+										formula_tree.TransitionDurationLessThanStateValueMixed,
+										formula_tree.TransitionDurationLessThanStateValueLengthMixed]:
 
 							# there may be multiple bind variables
 							composition_sequences = derive_composition_sequence(atom)
@@ -844,6 +845,27 @@ if __name__ == "__main__":
 									print("placing rhs instrument for scfg object %s" % atom._rhs)
 									instrument_point_state(atom._rhs, atom._rhs_name, point, binding_space_indices,
 										atom_index, atom_sub_index, instrumentation_point_db_ids)
+
+							elif type(atom) is formula_tree.TransitionDurationLessThanStateValueLengthMixed:
+								"""
+								We're instrumenting multiple transitions, so we need to perform instrumentation on two separate points.
+								"""
+
+								# for each side of the atom (LHS and RHS), instrument the necessary points
+
+								print("instrumenting for a mixed atom %s with sub atom index %i" % (atom, atom_sub_index))
+
+								if atom_sub_index == 0:
+									# we're instrumenting for the lhs
+									print("placing lhs instrument for scfg object %s" % atom._lhs)
+									instrument_point_transition(atom, point, binding_space_indices,
+										atom_index, atom_sub_index, instrumentation_point_db_ids)
+								else:
+									# we're instrumenting for the rhs
+									print("placing rhs instrument for scfg object %s" % atom._rhs)
+									instrument_point_state(atom._rhs, atom._rhs_name, point, binding_space_indices,
+										atom_index, atom_sub_index, instrumentation_point_db_ids,
+										measure_attribute="length")
 
 
 
