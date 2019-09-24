@@ -253,7 +253,9 @@ def get_instrumentation_points_from_comp_sequence(value_from_binding, moves):
 
 	return instrumentation_points
 
-def instrument_point_state(state, name, point, binding_space_indices, atom_index, atom_sub_index, instrumentation_point_db_ids):
+def instrument_point_state(state, name, point, binding_space_indices,
+							atom_index, atom_sub_index, instrumentation_point_db_ids,
+							measure_attribute=None):
 	"""
 	state is the PyCFTL object,
 	and point is the part of the SCFG found by traversal.
@@ -262,8 +264,13 @@ def instrument_point_state(state, name, point, binding_space_indices, atom_index
 
 	print("instrumenting point %s" % point)
 
-	state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
-	state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
+	if measure_attribute == "length":
+		state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
+		state_recording_instrument = "record_state_%s = len(%s); " % (state_variable_alias, name)
+	else:
+		state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
+		state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
+
 
 	instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," +\
 	"{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {{ '{atom_program_variable}' : {observed_value} }}, __thread_id")\
@@ -326,7 +333,8 @@ def instrument_point_state(state, name, point, binding_space_indices, atom_index
 		parent_block.insert(index_in_block+1, queue_ast)
 		parent_block.insert(index_in_block+1, record_state_ast)
 
-def instrument_point_transition(atom, point, binding_space_indices, atom_index, atom_sub_index, instrumentation_point_db_ids):
+def instrument_point_transition(atom, point, binding_space_indices, atom_index,
+								atom_sub_index, instrumentation_point_db_ids):
 
 	composition_sequence = derive_composition_sequence(atom)
 
@@ -766,6 +774,16 @@ if __name__ == "__main__":
 
 								instrument_point_state(atom._state, atom._name, point, binding_space_indices,
 										atom_index, atom_sub_index, instrumentation_point_db_ids)
+
+							elif type(atom) in [formula_tree.StateValueLengthInInterval]:
+								"""
+								Instrumentation for the length of a value given is different
+								because we have to add len() to the instrument.
+								"""
+
+								instrument_point_state(atom._state, atom._name, point, binding_space_indices,
+										atom_index, atom_sub_index, instrumentation_point_db_ids,
+										measure_attribute="length")
 
 							elif type(atom) in [formula_tree.StateValueEqualToMixed]:
 								"""

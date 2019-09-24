@@ -200,7 +200,7 @@ class StateValueLengthInInterval(Atom):
 		self.verdict = None
 
 	def __repr__(self):
-		return "len(%s(%s)) in %s" % (self._state, self._name, self._interval)
+		return "(%s(%s)).length() in %s" % (self._state, self._name, self._interval)
 
 	def __eq__(self, other_atom):
 		if type(other_atom) is StateValueLengthInInterval:
@@ -213,7 +213,7 @@ class StateValueLengthInInterval(Atom):
 		"""
 		Mandatory check method used by formula trees to compute truth values.
 		"""
-		return self._interval[0] <= len(value[0][0][self._name]) <= self._interval[1]
+		return self._interval[0] <= value[0][0][self._name] <= self._interval[1]
 
 class TransitionDurationInInterval(Atom):
 	"""
