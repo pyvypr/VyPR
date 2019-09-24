@@ -313,6 +313,9 @@ class StateValue(object):
 	def length(self):
 		return StateValueLength(self._state, self._name)
 
+	def type(self):
+		return StateValueType(self._state, self._name)
+
 	"""
 	Arithmetic overloading is useful for mixed atoms
 	when observed quantities are being compared to each other.
@@ -362,6 +365,25 @@ class StateValueLength(object):
 			self._state,
 			self._name,
 			interval
+		)
+
+class StateValueType(object):
+	"""
+	Models the length being measured of a value given by a state.
+	"""
+
+	def __init__(self, state, name):
+		self._state = state
+		self._name = name
+
+	def equals(self, value):
+		"""
+		Generates an atom.
+		"""
+		return formula_tree.StateValueTypeEqualTo(
+			self._state,
+			self._name,
+			value
 		)
 
 
@@ -554,6 +576,8 @@ def derive_composition_sequence(atom):
 		elif type(current_operator) == formula_tree.StateValueLengthInInterval:
 			current_operator = current_operator._state
 		elif type(current_operator) == formula_tree.StateValueInInterval:
+			current_operator = current_operator._state
+		elif type(current_operator) == formula_tree.StateValueTypeEqualTo:
 			current_operator = current_operator._state
 
 		sequence = composition_sequence_from_value(sequence, current_operator)

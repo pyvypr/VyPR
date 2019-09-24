@@ -267,6 +267,9 @@ def instrument_point_state(state, name, point, binding_space_indices,
 	if measure_attribute == "length":
 		state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
 		state_recording_instrument = "record_state_%s = len(%s); " % (state_variable_alias, name)
+	elif measure_attribute == "type":
+		state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
+		state_recording_instrument = "record_state_%s = type(%s).__name__; " % (state_variable_alias, name)
 	else:
 		state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
 		state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
@@ -775,6 +778,12 @@ if __name__ == "__main__":
 
 								instrument_point_state(atom._state, atom._name, point, binding_space_indices,
 										atom_index, atom_sub_index, instrumentation_point_db_ids)
+
+							elif type(atom) is formula_tree.StateValueTypeEqualTo:
+
+								instrument_point_state(atom._state, atom._name, point, binding_space_indices,
+										atom_index, atom_sub_index, instrumentation_point_db_ids,
+										measure_attribute="type")
 
 							elif type(atom) in [formula_tree.StateValueLengthInInterval]:
 								"""

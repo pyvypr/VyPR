@@ -148,6 +148,30 @@ class StateValueEqualTo(Atom):
 	def check(self, value):
 		return self._value == value[0][0][self._name]
 
+class StateValueTypeEqualTo(Atom):
+	"""
+	This class models the atom (type(s(x)) = T).
+	"""
+
+	def __init__(self, state, name, value):
+		self._state = state
+		self._name = name
+		self._value = value
+		self.verdict = None
+
+	def __repr__(self):
+		return "type((%s)(%s)) = %s" % (self._state, self._name, self._value)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is StateValueTypeEqualTo:
+			return (self._state == other_atom._state and self._name == other_atom._name\
+				and self._value == other_atom._value)
+		else:
+			return False
+
+	def check(self, value):
+		return value[0][0][self._name] == self._value.__name__
+
 class StateValueEqualToMixed(Atom):
 	"""
 	This class models the atom (s1(x) = s2(y)).
