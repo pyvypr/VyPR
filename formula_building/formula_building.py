@@ -162,6 +162,7 @@ class changes(object):
 		return StaticState(
 			bind_variable_name,
 			self._name_changed,
+			None,
 			self._required_binding,
 			self._treat_as_ref
 		)
@@ -172,15 +173,35 @@ class calls(object):
 	"""
 
 	def __init__(self, operates_on, after=None, record=None):
-		self._operates_on = operates_on
+		self._operates_on = criteria
 		self._required_binding = after
 		self._record = record
 
 	def complete_instantiation(self, bind_variable_name):
 		return StaticTransition(
 			bind_variable_name,
-			self._operates_on, self._required_binding,
+			self._operates_on,
+			None,
+			self._required_binding,
 			self._record
+		)
+
+class state_after_line(object):
+	"""
+	Syntactic sugar for specifications.
+	"""
+
+	def __init__(self, coordinates, after=None):
+		self._instruction_coordinates = coordinates
+		self._required_binding = after
+
+	def complete_instantiation(self, bind_variable_name):
+		return StaticState(
+			bind_variable_name,
+			None,
+			self._instruction_coordinates,
+			self._required_binding,
+			None
 		)
 
 """
@@ -202,10 +223,11 @@ class StaticState(object):
 	Models a state attained by the monitored program at runtime.
 	"""
 
-	def __init__(self, bind_variable_name, name_changed, uses=None, treat_as_ref=False):
+	def __init__(self, bind_variable_name, name_changed, instruction_coordinates, uses=None, treat_as_ref=False):
 		self._bind_variable_name = bind_variable_name
 		self._name = None
 		self._name_changed = name_changed
+		self._instruction_coordinates = instruction_coordinates
 		self._required_binding = uses
 		self._treat_as_ref = treat_as_ref
 		# this will be added to if a function is applied
@@ -392,9 +414,10 @@ class StaticTransition(object):
 	Models transition that occurs during a program's runtime.
 	"""
 
-	def __init__(self, bind_variable_name, operates_on, uses=None, record=None):
+	def __init__(self, bind_variable_name, operates_on, instruction_coordinates, uses=None, record=None):
 		self._bind_variable_name = bind_variable_name
 		self._operates_on = operates_on
+		self._instruction_coordinates = instruction_coordinates
 		self._required_binding = uses
 		self._record = record
 

@@ -83,9 +83,40 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
 		# we've just started - compute the static qd for the first quantifier,
 		# then iterate over it and recurse into the list of quantifiers for each element
 		if type(quantifier_sequence._bind_variables[0]) is StaticState:
-			variable_changed = quantifier_sequence._bind_variables[0]._name_changed
-			qd = filter(lambda symbolic_state : symbolic_state._name_changed == variable_changed\
-				or variable_changed in symbolic_state._name_changed, scfg.vertices)
+			if quantifier_sequence._bind_variables[0]._name_changed:
+				# a name was given as selection criteria
+				variable_changed = quantifier_sequence._bind_variables[0]._name_changed
+				qd = filter(lambda symbolic_state : symbolic_state._name_changed == variable_changed\
+					or variable_changed in symbolic_state._name_changed, scfg.vertices)
+			else:
+				qd = []
+				# a list of coordinates were given
+				if type(quantifier_sequence._bind_variables[0]._instruction_coordinates) is list:
+					coordinates = quantifier_sequence._bind_variables[0]._instruction_coordinates
+				else:
+					coordinates = [quantifier_sequence._bind_variables[0]._instruction_coordinates]
+				for coordinate in coordinates:
+					# get all vertices whose previous edges have statements with matching lineno values,
+					# sort the col_offset values in ascending order, then get the vertex at the index
+					# specified by the coordinate
+					if type(coordinate) is int:
+						line_number = coordinate
+						offset = 0
+					else:
+						line_number = coordinate[0]
+						if len(coordinate) == 1:
+							offset = 0
+						else:
+							offset = coordinate[1]
+					relevant_vertices = filter(
+						lambda symbolic_state : not(symbolic_state._previous_edge is None)\
+							and not(type(symbolic_state._previous_edge._instruction) is str)\
+							and symbolic_state._previous_edge._instruction.lineno == line_number,
+						scfg.vertices
+					)
+					relevant_vertices.sort(key=lambda vertex : vertex._previous_edge._instruction.col_offset)
+					relevant_vertex = relevant_vertices[offset]
+					qd.append(relevant_vertex)
 		elif type(quantifier_sequence._bind_variables[0]) is StaticTransition:
 			variable_operated_on = quantifier_sequence._bind_variables[0]._operates_on
 			relevant_target_vertices = filter(
