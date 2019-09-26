@@ -173,7 +173,7 @@ class calls(object):
 	"""
 
 	def __init__(self, operates_on, after=None, record=None):
-		self._operates_on = criteria
+		self._operates_on = operates_on
 		self._required_binding = after
 		self._record = record
 
