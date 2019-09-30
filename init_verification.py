@@ -38,7 +38,7 @@ def vypr_output(string, *args):
 		else:
 			print("[VyPR] - %s - %s" % (str(datetime.datetime.now()), string))
 
-def send_verdict_report(function_name, time_of_call, program_path, verdict_report, binding_to_line_numbers, http_request_time, property_hash):
+def send_verdict_report(function_name, time_of_call, end_time_of_call, program_path, verdict_report, binding_to_line_numbers, http_request_time, property_hash):
 	"""
 	Send verdict data for a given function call (function name + time of call).
 	"""
@@ -51,11 +51,13 @@ def send_verdict_report(function_name, time_of_call, program_path, verdict_repor
 	call_data = {
 		"http_request_time" : http_request_time.isoformat(),
 		"time_of_call" : time_of_call.isoformat(),
+		"end_time_of_call" : end_time_of_call.isoformat(),
 		"function_name" : function_name,
 		"property_hash" : property_hash,
 		"program_path" : program_path
 	}
-	print(call_data)
+	vypr_output("CALL DATA")
+	vypr_output(call_data)
 	insertion_result = json.loads(requests.post(
 		os.path.join(VERDICT_SERVER_URL, "insert_function_call_data/"),
 		data=json.dumps(call_data)
@@ -204,6 +206,7 @@ def consumption_thread_function(verification_obj):
 				send_verdict_report(
 					function_name,
 					maps.latest_time_of_call,
+					datetime.datetime.now(),
 					maps.program_path,
 					verdict_report,
 					binding_to_line_numbers,
