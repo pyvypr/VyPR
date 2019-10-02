@@ -207,9 +207,9 @@ class StateValueEqualToMixed(Atom):
 				cummulative_state[0][0]
 			)
 			rhs_with_arithmetic = apply_arithmetic_stack(
-                                self._rhs.arithmetic_stack,
-                                cummulative_state[1][0]
-                       	)
+            	self._rhs.arithmetic_stack,
+				cummulative_state[1][0]
+			)
 			return lhs_with_arithmetic == rhs_with_arithmetic
 
 class StateValueLengthInInterval(Atom):
@@ -332,7 +332,7 @@ class TransitionDurationLessThanStateValueMixed(Atom):
 
 class TransitionDurationLessThanStateValueLengthMixed(Atom):
 	"""
-	This class models the atom (duration(t) < v.length())
+	This class models the atom (t.duration() < v.length())
 	for v a value given by a state.
 	"""
 
@@ -343,7 +343,7 @@ class TransitionDurationLessThanStateValueLengthMixed(Atom):
 		self.verdict = None
 
 	def __repr__(self):
-		return "d(%s) < (%s)(%s).length()" % (self._lhs, self._rhs, self._rhs_name)
+		return "(%s).duration() < (%s)(%s).length()" % (self._lhs, self._rhs, self._rhs_name)
 
 	def __eq__(self, other_atom):
 		if type(other_atom) is TransitionDurationLessThanStateValueLengthMixed:
@@ -356,16 +356,80 @@ class TransitionDurationLessThanStateValueLengthMixed(Atom):
 	def check(self, cummulative_state):
 		"""
 		If either the RHS or LHS are None, we don't try to reach a truth value.
-		But if they are both not equal to None, we check for equality.
+		But if they are both not equal to None, we check the values.
 		"""
 		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
 			return None
 		else:
-                        rhs_with_arithmetic = apply_arithmetic_stack(
-                                self._rhs._arithmetic_stack,
-                                cummulative_state[1][0][self._rhs_name]
-                        )
+			rhs_with_arithmetic = apply_arithmetic_stack(
+				self._rhs._arithmetic_stack,
+				cummulative_state[1][0][self._rhs_name]
+			)
 			return cummulative_state[0][0].total_seconds() < rhs_with_arithmetic
+
+class TimeBetweenInInterval(Atom):
+	"""
+	This class models the atom (timeBetween(q1, q2)._in([n, m]))
+	for q1, q2 states and n, m constants.
+	"""
+
+	def __init__(self, lhs, rhs, interval):
+		self._lhs = lhs
+		self._rhs = rhs
+		self._interval = interval
+		self.verdict = None
+
+	def __repr__(self):
+		return "timeBetween(%s, %s) in %s" % (self._lhs, self._rhs, self._interval)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TimeBetweenInInterval:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs and
+				self._interval == other_atom._interval)
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check the values.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+			# measure the time difference and check for containment in the interval
+			return self._interval[0] <= (cummulative_state[1][0]["time"] - cummulative_state[0][0]["time"]).total_seconds() <= self._interval[1]
+
+class TimeBetweenInOpenInterval(Atom):
+	"""
+	This class models the atom (timeBetween(q1, q2)._in((n, m))
+	for q1, q2 states and n, m constants.
+	"""
+
+	def __init__(self, lhs, rhs, interval):
+		self._lhs = lhs
+		self._rhs = rhs
+		self._interval = interval
+		self.verdict = None
+
+	def __repr__(self):
+		return "timeBetween(%s, %s) in %i" % (self._lhs, self._rhs, self._interval)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TimeBetweenInInterval:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs and
+				self._interval == other_atom._interval)
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check the values.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+			# measure the time difference and check for containment in the interval
+			return self._interval[0] < (cummulative_state[1][0]["time"] - cummulative_state[0][0]["time"]).total_seconds() < self._interval[1]
 
 """
 Classes for propositional logical connectives.

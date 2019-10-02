@@ -301,6 +301,11 @@ def instrument_point_state(state, name, point, binding_space_indices,
 	elif measure_attribute == "type":
 		state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
 		state_recording_instrument = "record_state_%s = type(%s).__name__; " % (state_variable_alias, name)
+	elif measure_attribute == "time_attained":
+		state_variable_alias = "time_attained_%i" % atom_sub_index
+		state_recording_instrument = "record_state_%s = datetime.datetime.now(); " % state_variable_alias
+		# the only purpose here is to match what is expected in the monitoring algorithm
+		name = "time"
 	else:
 		state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
 		state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
@@ -664,7 +669,9 @@ if __name__ == "__main__":
 						if type(atom) in [formula_tree.StateValueEqualToMixed,
 										formula_tree.TransitionDurationLessThanTransitionDurationMixed,
 										formula_tree.TransitionDurationLessThanStateValueMixed,
-										formula_tree.TransitionDurationLessThanStateValueLengthMixed]:
+										formula_tree.TransitionDurationLessThanStateValueLengthMixed,
+										formula_tree.TimeBetweenInInterval,
+										formula_tree.TimeBetweenInOpenInterval]:
 
 							# there may be multiple bind variables
 							composition_sequences = derive_composition_sequence(atom)
@@ -906,6 +913,28 @@ if __name__ == "__main__":
 									instrument_point_state(atom._rhs, atom._rhs_name, point, binding_space_indices,
 										atom_index, atom_sub_index, instrumentation_point_db_ids,
 										measure_attribute="length")
+
+							elif type(atom) in [formula_tree.TimeBetweenInInterval, formula_tree.TimeBetweenInOpenInterval]:
+								"""
+								We're instrumenting multiple transitions, so we need to perform instrumentation on two separate points.
+								"""
+
+								# for each side of the atom (LHS and RHS), instrument the necessary points
+
+								print("instrumenting for a mixed atom %s with sub atom index %i" % (atom, atom_sub_index))
+
+								if atom_sub_index == 0:
+									# we're instrumenting for the lhs
+									print("placing lhs instrument for scfg object %s" % atom._lhs)
+									instrument_point_state(atom._lhs, None, point, binding_space_indices,
+										atom_index, atom_sub_index, instrumentation_point_db_ids,
+										measure_attribute="time_attained")
+								else:
+									# we're instrumenting for the rhs
+									print("placing rhs instrument for scfg object %s" % atom._rhs)
+									instrument_point_state(atom._rhs, None, point, binding_space_indices,
+										atom_index, atom_sub_index, instrumentation_point_db_ids,
+										measure_attribute="time_attained")
 
 
 

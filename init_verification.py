@@ -29,7 +29,12 @@ VYPR_OUTPUT_VERBOSE = True
 
 # thank you to the CMS Conditions Browser team for this
 def to_timestamp(obj):
-    return obj.total_seconds() if isinstance(obj, datetime.timedelta) else obj
+	if type(obj) is datetime.datetime:
+		return obj.isoformat()
+	elif type(obj) is datetime.timedelta:
+		return obj.total_seconds()
+	else:
+		return obj
 
 def vypr_output(string, *args):
 	if VYPR_OUTPUT_VERBOSE:

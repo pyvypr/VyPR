@@ -346,7 +346,7 @@ class StateValue(object):
 	def __mul__(self, value):
 		"""
 		Given a constant (we assume this for now),
-		add a lambda to the arithmetic stack so it can be applied
+		add an object to the arithmetic stack so it can be applied
 		later when values are checked.
 		"""
 		if self._state._arithmetic_build:
@@ -357,17 +357,17 @@ class StateValue(object):
 	def __add__(self, value):
 		if self._state._arithmetic_build:
 			self._state._arithmetic_stack.append(formula_tree.ArithmeticAdd(value))
-                return self
+		return self
 
 	def __sub__(self, value):
 		if self._state._arithmetic_build:
-                	self._state._arithmetic_stack.append(formula_tree.ArithmeticSubtract(value))
-                return self
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticSubtract(value))
+		return self
 
 	def __truediv__(self, value):
 		if self._state._arithmetic_build:
-                	self._state._arithmetic_stack.append(formula_tree.ArithmeticTrueDivide(value))
-                return self
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticTrueDivide(value))
+		return self
 
 
 class StateValueLength(object):
@@ -388,6 +388,37 @@ class StateValueLength(object):
 			self._name,
 			interval
 		)
+
+	"""
+	Arithmetic overloading is useful for mixed atoms
+	when observed quantities are being compared to each other.
+	"""
+
+	def __mul__(self, value):
+		"""
+		Given a constant (we assume this for now),
+		add an object to the arithmetic stack so it can be applied
+		later when values are checked.
+		"""
+		if self._state._arithmetic_build:
+			print("EVALUATING MULTIPLICATION OF STATE VALUE")
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticMultiply(value))
+		return self
+
+	def __add__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticAdd(value))
+		return self
+
+	def __sub__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticSubtract(value))
+		return self
+
+	def __truediv__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticTrueDivide(value))
+		return self
 
 class StateValueType(object):
 	"""
@@ -532,6 +563,41 @@ class Duration(object):
 					value._transition,
 				)
 
+"""
+Syntactic sugar for time between states.
+"""
+
+def timeBetween(state1, state2):
+	return TimeBetweenStates(state1, state2)
+
+class TimeBetweenStates(object):
+	"""
+	Models the time between two states.
+	"""
+
+	def __init__(self, lhs, rhs):
+		self._lhs = lhs
+		self._rhs = rhs
+
+	def _in(self, interval):
+		"""
+		Generates an atom.
+		"""
+		if type(interval) is list:
+			return formula_tree.TimeBetweenInInterval(
+				self._lhs,
+				self._rhs,
+				interval
+			)
+		elif type(interval) is tuple:
+			return formula_tree.TimeBetweenInOpenInterval(
+				self._lhs,
+				self._rhs,
+				interval
+			)
+		else:
+			raise Exception("TimeBetween predicate wasn't defined properly.")
+
 
 def composition_sequence_from_value(sequence, current_operator):
 
@@ -568,7 +634,9 @@ def derive_composition_sequence(atom):
 	if type(atom) in [formula_tree.StateValueEqualToMixed,
 					formula_tree.TransitionDurationLessThanTransitionDurationMixed,
 					formula_tree.TransitionDurationLessThanStateValueMixed,
-					formula_tree.TransitionDurationLessThanStateValueLengthMixed]:
+					formula_tree.TransitionDurationLessThanStateValueLengthMixed,
+					formula_tree.TimeBetweenInInterval,
+					formula_tree.TimeBetweenInOpenInterval]:
 
 		# atom is mixed - two composition sequences
 
