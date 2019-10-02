@@ -68,17 +68,18 @@ def send_verdict_report(function_name, time_of_call, end_time_of_call, program_p
 		data=json.dumps(call_data)
 	).text)
 
-	# second, send verdict data
+	# second, send verdict data - all data in one request
+	# for this, we first build the structure
+	# that we'll send over HTTP
+	verdict_dict_list = []
 	for bind_space_index in verdicts.keys():
 		verdict_list = verdicts[bind_space_index]
 		for verdict in verdict_list:
+
 			# remember to deal with datetime objects in json serialisation
-			request_body_dict = {
-				"function_call_id" : insertion_result["function_call_id"],
-				"function_id" : insertion_result["function_id"],
+			verdict_dict = {
 				"bind_space_index" : bind_space_index,
-				"verdict" : json.dumps(
-						[
+				"verdict" : [
 							verdict[0],
 							verdict[1].isoformat(),
 							verdict[2],
@@ -87,16 +88,26 @@ def send_verdict_report(function_name, time_of_call, end_time_of_call, program_p
 							verdict[5],
 							verdict[6]
 						],
-						default=to_timestamp
-					),
 				"line_numbers" : json.dumps(binding_to_line_numbers[bind_space_index]),
 			}
-			try:
-				response = requests.post(os.path.join(VERDICT_SERVER_URL, "register_verdict/"), data=json.dumps(request_body_dict))
-			except Exception as e:
-				vypr_output("Something went wrong when sending verdict information to the verdict server.  The verdict information we tried to send is now lost.")
-				import traceback
-				vypr_output(traceback.format_exc())
+			verdict_dict_list.append(verdict_dict)
+
+	request_body_dict = {
+		"function_call_id" : insertion_result["function_call_id"],
+		"function_id" : insertion_result["function_id"],
+		"verdicts" : verdict_dict_list
+	}
+
+	print("VERDICT DATA")
+	print(str(request_body_dict))
+
+	# send request
+	try:
+		response = requests.post(os.path.join(VERDICT_SERVER_URL, "register_verdicts/"), data=json.dumps(request_body_dict, default=to_timestamp))
+	except Exception as e:
+		vypr_output("Something went wrong when sending verdict information to the verdict server.  The verdict information we tried to send is now lost.")
+		import traceback
+		vypr_output(traceback.format_exc())
 
 	vypr_output("Verdicts sent.")
 
@@ -361,7 +372,7 @@ def consumption_thread_function(verification_obj):
 						print(monitor._state._state)
 						# checking for previous observation of the atom is done by the monitor's internal logic
 						monitor.process_atom_and_value(instrumentation_atom, observed_value, atom_index, atom_sub_index,
-							inst_point_id=instrumentation_point_db_id, program_path=program_path, state_dict=state_dict)
+							inst_point_id=instrumentation_point_db_id, program_path=len(program_path), state_dict=state_dict)
 
 		# set the task as done
 		verification_obj.consumption_queue.task_done()

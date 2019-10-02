@@ -207,9 +207,9 @@ class StateValueEqualToMixed(Atom):
 				cummulative_state[0][0]
 			)
 			rhs_with_arithmetic = apply_arithmetic_stack(
-            	self._rhs.arithmetic_stack,
-				cummulative_state[1][0]
-			)
+                                self._rhs.arithmetic_stack,
+                                cummulative_state[1][0]
+                       	)
 			return lhs_with_arithmetic == rhs_with_arithmetic
 
 class StateValueLengthInInterval(Atom):
@@ -332,7 +332,7 @@ class TransitionDurationLessThanStateValueMixed(Atom):
 
 class TransitionDurationLessThanStateValueLengthMixed(Atom):
 	"""
-	This class models the atom (t.duration() < v.length())
+	This class models the atom (duration(t) < v.length())
 	for v a value given by a state.
 	"""
 
@@ -343,7 +343,7 @@ class TransitionDurationLessThanStateValueLengthMixed(Atom):
 		self.verdict = None
 
 	def __repr__(self):
-		return "(%s).duration() < (%s)(%s).length()" % (self._lhs, self._rhs, self._rhs_name)
+		return "d(%s) < (%s)(%s).length()" % (self._lhs, self._rhs, self._rhs_name)
 
 	def __eq__(self, other_atom):
 		if type(other_atom) is TransitionDurationLessThanStateValueLengthMixed:
@@ -356,15 +356,15 @@ class TransitionDurationLessThanStateValueLengthMixed(Atom):
 	def check(self, cummulative_state):
 		"""
 		If either the RHS or LHS are None, we don't try to reach a truth value.
-		But if they are both not equal to None, we check the values.
+		But if they are both not equal to None, we check for equality.
 		"""
 		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
 			return None
 		else:
-			rhs_with_arithmetic = apply_arithmetic_stack(
-				self._rhs._arithmetic_stack,
-				cummulative_state[1][0][self._rhs_name]
-			)
+                        rhs_with_arithmetic = apply_arithmetic_stack(
+                                self._rhs._arithmetic_stack,
+                                cummulative_state[1][0][self._rhs_name]
+                        )
 			return cummulative_state[0][0].total_seconds() < rhs_with_arithmetic
 
 class TimeBetweenInInterval(Atom):
@@ -819,7 +819,9 @@ class Checker(object):
 
 		if not(self.atom_to_observation[atom_index].get(atom_sub_index)):
 			self.atom_to_observation[atom_index][atom_sub_index] = (value, inst_point_id)
-			self.atom_to_program_path[atom_index][atom_sub_index] = [v for v in program_path]
+			#self.atom_to_program_path[atom_index][atom_sub_index] = [v for v in program_path]
+			# we deal with integer indices now, so no need to copy a list
+			self.atom_to_program_path[atom_index][atom_sub_index] = program_path
 			self.atom_to_state_dict[atom_index][atom_sub_index] = state_dict
 		else:
 			# the observation has already been processed - no need to do anything
