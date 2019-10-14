@@ -36,6 +36,9 @@ EXPLANATION = False
 DRAW_GRAPHS = False
 VERIFICATION_HOME_MODULE = None
 BYTECODE_EXTENSION = ".pyc"
+PROJECT_ROOT = ""
+USE_FLASK = True
+VERIFICATION_INSTRUCTION = "verification.send_event"
 
 """def print(*s):
 	global VERBOSE
@@ -292,7 +295,7 @@ def instrument_point_state(state, name, point, binding_space_indices,
 	state is the PyCFTL object,
 	and point is the part of the SCFG found by traversal.
 	"""
-	global verification_instruction
+	global VERIFICATION_INSTRUCTION
 
 	print("instrumenting point %s" % point)
 
@@ -324,7 +327,7 @@ def instrument_point_state(state, name, point, binding_space_indices,
 		atom_program_variable = name,
 		observed_value = ("record_state_%s" % state_variable_alias)
 	)
-	state_recording_instrument += "%s((%s))" % (verification_instruction, instrument_tuple)
+	state_recording_instrument += "%s((%s))" % (VERIFICATION_INSTRUCTION, instrument_tuple)
 
 	record_state_ast = ast.parse(state_recording_instrument).body[0]
 	queue_ast = ast.parse(state_recording_instrument).body[1]
@@ -413,7 +416,7 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
 			observed_value = "__duration",
 			state_dict = state_dict
 		)
-	time_difference_statement += "%s((%s))" % (verification_instruction, instrument_tuple)
+	time_difference_statement += "%s((%s))" % (VERIFICATION_INSTRUCTION, instrument_tuple)
 
 	start_ast = ast.parse(timer_start_statement).body[0]
 	end_ast = ast.parse(timer_end_statement).body[0]
@@ -452,6 +455,7 @@ if __name__ == "__main__":
 	DRAW_GRAPHS = args.draw_graphs
 
 	inst_configuration = read_configuration("vypr.config")
+
 	VERDICT_SERVER_URL = inst_configuration.get("verdict_server_url")\
 		if inst_configuration.get("verdict_server_url") else "http://localhost:9001/"
 	EXPLANATION = inst_configuration.get("explanation") == "on"
@@ -459,6 +463,15 @@ if __name__ == "__main__":
 		if inst_configuration.get("verification_home_module") else "app"
 	BYTECODE_EXTENSION = inst_configuration.get("bytecode_extension")\
 		if inst_configuration.get("bytecode_extension") else ".pyc"
+	PROJECT_ROOT = inst_configuration.get("project_root")\
+		if inst_configuration.get("project_root") else ""
+	USE_FLASK = inst_configuration.get("use_flask")\
+		if inst_configuration.get("use_flask") else "no"
+	VERIFICATION_INSTRUCTION = inst_configuration.get("verification_instruction")\
+		if inst_configuration.get("verification_instruction") else "verification.send_event"
+
+	# convert the USE_FLASK flag to boolean
+	USE_FLASK = {"yes" : True, "no" : False}[USE_FLASK]
 
 	# reset code to non-instrumented
 	for directory in os.walk("."):
@@ -485,8 +498,6 @@ if __name__ == "__main__":
 
 	# for each verified function, find the file in which it is defined
 
-	verification_instruction = "verification.send_event"
-
 	for module in verified_modules:
 
 		print("MODULE %s" % module)
@@ -501,20 +512,16 @@ if __name__ == "__main__":
 		asts = ast.parse(code)
 
 		# add necessary imports for instruments to work
-		import_code = "from %s import verification; import flask" % VERIFICATION_HOME_MODULE
-		import_asts = ast.parse(import_code)
+		if USE_FLASK:
+			# if we're using flask, we assume a certain architecture
+			import_code = "from %s import verification; import flask" % VERIFICATION_HOME_MODULE
+			import_asts = ast.parse(import_code)
 
-		verification_import = import_asts.body[0]
-		flask_import = import_asts.body[1]
+			verification_import = import_asts.body[0]
+			flask_import = import_asts.body[1]
 
-		"""verification_import.lineno = asts.body[0].lineno
-		verification_import.col_offset = asts.body[0].col_offset"""
-
-		"""flask_import.lineno = asts.body[0].lineno
-		flask_import.col_offset = asts.body[0].col_offset"""
-
-		asts.body.insert(0, flask_import)
-		asts.body.insert(0, verification_import)
+			asts.body.insert(0, flask_import)
+			asts.body.insert(0, verification_import)
 
 		for function in verified_functions:
 
@@ -732,7 +739,7 @@ if __name__ == "__main__":
 						point = element[bind_variable_index]
 
 						instrument = "%s((\"%s\", \"trigger\", \"%s\", %i, %i))" %\
-							(verification_instruction, formula_hash, instrument_function_qualifier, m, bind_variable_index)
+							(VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, m, bind_variable_index)
 
 						instrument_ast = ast.parse(instrument).body[0]
 						if type(point) is CFGVertex:
@@ -973,7 +980,7 @@ if __name__ == "__main__":
 							except:
 								print("There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
 								exit()
-							instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
+							instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, branching_condition_id)
 							instrument_ast = ast.parse(instrument_code).body[0]
 							"""instrument_ast.lineno = vertex_information[1]._parent_body[0].lineno
 							instrument_ast.col_offset = vertex_information[1]._parent_body[0].col_offset"""
@@ -994,7 +1001,7 @@ if __name__ == "__main__":
 							except:
 								print("There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
 								exit()
-							instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
+							instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, branching_condition_id)
 							instrument_ast = ast.parse(instrument_code).body[0]
 							vertex_information[1].orelse.insert(0, instrument_ast)
 							print("Branch recording instrument placed")
@@ -1024,7 +1031,7 @@ if __name__ == "__main__":
 							except:
 								print("There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
 								exit()
-							instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
+							instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, branching_condition_id)
 							instrument_code_ast = ast.parse(instrument_code).body[0]
 							"""instrument_code_ast.lineno = vertex_information[1].lineno+1
 							instrument_code_ast.col_offset = vertex_information[1].col_offset"""
@@ -1045,7 +1052,7 @@ if __name__ == "__main__":
 							except:
 								print("There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
 								exit()
-							instrument_code_inside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
+							instrument_code_inside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, branching_condition_id)
 							instrument_inside_loop_ast = ast.parse(instrument_code_inside_loop).body[0]
 							"""instrument_inside_loop_ast.lineno = vertex_information[1].lineno
 							instrument_inside_loop_ast.col_offset = vertex_information[1].col_offset"""
@@ -1059,7 +1066,7 @@ if __name__ == "__main__":
 							except:
 								print("There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
 								exit()
-							instrument_code_outside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (verification_instruction, formula_hash, instrument_function_qualifier, branching_condition_id)
+							instrument_code_outside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, branching_condition_id)
 							instrument_outside_loop_ast = ast.parse(instrument_code_outside_loop).body[0]
 							"""instrument_outside_loop_ast.lineno = vertex_information[3].lineno+1
 							instrument_outside_loop_ast.col_offset = vertex_information[3].col_offset"""
@@ -1082,7 +1089,7 @@ if __name__ == "__main__":
 				# so a function call in the return statement maybe missed if it's part of verification...
 				thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
 				start_instrument = "%s((\"%s\", \"function\", \"%s\", \"start\", flask.g.request_time, \"%s\", __thread_id))"\
-							% (verification_instruction, formula_hash, instrument_function_qualifier, formula_hash)
+							% (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
 
 				threading_import_ast = ast.parse(thread_id_capture).body[0]
 				thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
@@ -1112,7 +1119,7 @@ if __name__ == "__main__":
 				# insert the end instrument before every return statement
 				for end_vertex in scfg.return_statements:
 					end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id))"\
-										% (verification_instruction, formula_hash, instrument_function_qualifier, formula_hash)
+										% (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
 					end_ast = ast.parse(end_instrument).body[0]
 
 					"""end_ast.lineno = end_vertex._previous_edge._instruction.lineno
@@ -1131,7 +1138,7 @@ if __name__ == "__main__":
 				# if the last instruction in the ast is not a return statement, add an end instrument at the end
 				if not(type(function_def.body[-1]) is ast.Return):
 					end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\"))"\
-											% (verification_instruction, formula_hash, instrument_function_qualifier, formula_hash)
+											% (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
 					end_ast = ast.parse(end_instrument).body[0]
 
 					function_def.body.insert(len(function_def.body), end_ast)

@@ -26,6 +26,7 @@ from VyPR.control_flow_graph.construction import CFGEdge, CFGVertex
 
 VERDICT_SERVER_URL = None
 VYPR_OUTPUT_VERBOSE = True
+PROJECT_ROOT = None
 
 # thank you to the CMS Conditions Browser team for this
 def to_timestamp(obj):
@@ -392,22 +393,29 @@ class PropertyMapGroup(object):
 		self._property_hash = property_hash
 
 		# read in instrumentation map
-		with open("instrumentation_maps/module-%s-function-%s-property-%s.dump" %\
+		with open(os.path.join(PROJECT_ROOT, "instrumentation_maps/module-%s-function-%s-property-%s.dump") %\
 				(module_name.replace(".", "-"), function_name.replace(":", "-"), property_hash), "rb") as h:
 			instr_map_dump = h.read()
 
 		# read in binding spaces
-		with open("binding_spaces/module-%s-function-%s-property-%s.dump" %\
+		with open(os.path.join(PROJECT_ROOT, "binding_spaces/module-%s-function-%s-property-%s.dump") %\
 				(module_name.replace(".", "-"), function_name.replace(":", "-"), property_hash), "rb") as h:
 			binding_space_dump = h.read()
 
 		# read in index hash map
-		with open("index_hash/module-%s-function-%s.dump" % (module_name.replace(".", "-"), function_name.replace(":", "-")), "rb") as h:
+		with open(os.path.join(PROJECT_ROOT, "index_hash/module-%s-function-%s.dump") %\
+				(module_name.replace(".", "-"), function_name.replace(":", "-")), "rb") as h:
 			index_to_hash_dump = h.read()
+
+		inst_configuration = read_configuration("vypr.config")
+
+		# get the specification file name
+		verification_conf_file = inst_configuration.get("specification_file")\
+			if inst_configuration.get("specification_file") else "verification_conf.py"
 
 		# reconstruct formula structure
 		# there's probably a better way to do this
-		exec("".join(open("verification_conf.py", "r").readlines()))
+		exec("".join(open(verification_conf_file, "r").readlines()))
 		index_to_hash = pickle.loads(index_to_hash_dump)
 		property_index = index_to_hash.index(property_hash)
 
@@ -443,9 +451,10 @@ class Verification(object):
 
 		# read configuration file
 		inst_configuration = read_configuration("vypr.config")
-		global VERDICT_SERVER_URL, VYPR_OUTPUT_VERBOSE
+		global VERDICT_SERVER_URL, VYPR_OUTPUT_VERBOSE, PROJECT_ROOT
 		VERDICT_SERVER_URL = inst_configuration.get("verdict_server_url") if inst_configuration.get("verdict_server_url") else "http://localhost:9001/"
 		VYPR_OUTPUT_VERBOSE = inst_configuration.get("verbose") if inst_configuration.get("verbose") else True
+		PROJECT_ROOT = inst_configuration.get("project_root") if inst_configuration.get("project_root") else ""
 
 		# try to connect to the verdict server before we set anything up
 		try:
@@ -488,7 +497,7 @@ class Verification(object):
 		# set up the maps that the monitoring algorithm that the consumption thread runs
 
 		# we need the list of functions that we have instrumentation data from, so read the instrumentation maps directory
-		dump_files = filter(lambda filename : ".dump" in filename, os.listdir("instrumentation_maps"))
+		dump_files = filter(lambda filename : ".dump" in filename, os.listdir(os.path.join(PROJECT_ROOT, "instrumentation_maps")))
 		functions_and_properties = map(lambda function_dump_file : function_dump_file.replace(".dump", ""), dump_files)
 		tokens = map(lambda string : string.split("-"), functions_and_properties)
 
