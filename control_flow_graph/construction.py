@@ -25,7 +25,7 @@ import time
 import threading
 import Queue
 
-from graphviz import Digraph
+#from graphviz import Digraph
 #sys.path.append(".")
 from VyPR.monitor_synthesis import formula_tree
 from VyPR.formula_building.formula_building import *
@@ -718,6 +718,8 @@ class CFG(object):
 						[vertex.edges[0], vertex.edges[0]._target_state],
 						[vertex.edges[1]]
 					]
+				elif vertex.edges[0]._target_state._name_changed == ["post-conditional"]:
+					final_map[vertex] = [[vertex.edges[0]]]
 				else:
 					final_map[vertex] = [[vertex.edges[0], vertex.edges[0]._target_state]]
 
