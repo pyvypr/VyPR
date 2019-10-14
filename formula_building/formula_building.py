@@ -84,6 +84,11 @@ class Forall(object):
 		# defined by calling Formula
 		self._formula = None
 
+		# this is set to True when self.Formula() is called
+		# it's used to decide whether arithmetic operations should be
+		# added to atoms' stacks or not, to prevent double evaluation
+		self._instantiation_complete = False
+
 	def __repr__(self):
 		if self._formula is None:
 			return "Forall(%s)" % self.bind_variables
@@ -114,10 +119,13 @@ class Forall(object):
 		self._formula = formula_lambda
 		# generate instantiated formula to compute its atoms
 		self._formula_atoms =\
-			formula_tree.get_positive_formula_alphabet(self.get_formula_instance())
+			formula_tree.get_positive_formula_alphabet(self.get_formula_instance(
+				first_time=True
+			))
+		self._instantiation_complete = True
 		return self
 
-	def get_formula_instance(self):
+	def get_formula_instance(self, first_time=False):
 		"""
 		Instantiate the formula using the lambda stored.
 		"""
@@ -127,7 +135,17 @@ class Forall(object):
 			lambda arg_name : self.bind_variables[arg_name],
 			argument_names
 		)
-		return self._formula(*bind_variables)
+		if first_time:
+			# enable "_arithmetic_build" flag in bind variables
+			# so arithmetic operations are added
+			for bind_variable in bind_variables:
+				bind_variable._arithmetic_build = True
+		formula = self._formula(*bind_variables)
+		# switch off arithmetic build flags
+		if first_time:
+                        for bind_variable in bind_variables:
+                                bind_variable._arithmetic_build	= False
+		return formula
 
 class changes(object):
 	"""
@@ -144,6 +162,7 @@ class changes(object):
 		return StaticState(
 			bind_variable_name,
 			self._name_changed,
+			None,
 			self._required_binding,
 			self._treat_as_ref
 		)
@@ -161,8 +180,28 @@ class calls(object):
 	def complete_instantiation(self, bind_variable_name):
 		return StaticTransition(
 			bind_variable_name,
-			self._operates_on, self._required_binding,
+			self._operates_on,
+			None,
+			self._required_binding,
 			self._record
+		)
+
+class state_after_line(object):
+	"""
+	Syntactic sugar for specifications.
+	"""
+
+	def __init__(self, coordinates, after=None):
+		self._instruction_coordinates = coordinates
+		self._required_binding = after
+
+	def complete_instantiation(self, bind_variable_name):
+		return StaticState(
+			bind_variable_name,
+			None,
+			self._instruction_coordinates,
+			self._required_binding,
+			None
 		)
 
 """
@@ -184,12 +223,17 @@ class StaticState(object):
 	Models a state attained by the monitored program at runtime.
 	"""
 
-	def __init__(self, bind_variable_name, name_changed, uses=None, treat_as_ref=False):
+	def __init__(self, bind_variable_name, name_changed, instruction_coordinates, uses=None, treat_as_ref=False):
 		self._bind_variable_name = bind_variable_name
 		self._name = None
 		self._name_changed = name_changed
+		self._instruction_coordinates = instruction_coordinates
 		self._required_binding = uses
 		self._treat_as_ref = treat_as_ref
+		# this will be added to if a function is applied
+		# to the measurement in the PyCFTL specification.
+		self._arithmetic_stack = []
+		self._arithmetic_build = False
 
 	def __call__(self, name):
 		return StateValue(self, name)
@@ -289,25 +333,110 @@ class StateValue(object):
 			)
 
 	def length(self):
-		return formula_tree.StateValueLength(self)
+		return StateValueLength(self._state, self._name)
+
+	def type(self):
+		return StateValueType(self._state, self._name)
+
+	"""
+	Arithmetic overloading is useful for mixed atoms
+	when observed quantities are being compared to each other.
+	"""
+
+	def __mul__(self, value):
+		"""
+		Given a constant (we assume this for now),
+		add an object to the arithmetic stack so it can be applied
+		later when values are checked.
+		"""
+		if self._state._arithmetic_build:
+			print("EVALUATING MULTIPLICATION OF STATE VALUE")
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticMultiply(value))
+		return self
+
+	def __add__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticAdd(value))
+		return self
+
+	def __sub__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticSubtract(value))
+		return self
+
+	def __truediv__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticTrueDivide(value))
+		return self
 
 
-class StaticStateLength(object):
+class StateValueLength(object):
 	"""
 	Models the length being measured of a value given by a state.
 	"""
 
-	def __init__(self, static_state):
-		self._static_state = static_state
+	def __init__(self, state, name):
+		self._state = state
+		self._name = name
 
 	def _in(self, interval):
 		"""
 		Generates an atom.
 		"""
 		return formula_tree.StateValueLengthInInterval(
-			self,
-			self._static_state._name,
+			self._state,
+			self._name,
 			interval
+		)
+
+	"""
+	Arithmetic overloading is useful for mixed atoms
+	when observed quantities are being compared to each other.
+	"""
+
+	def __mul__(self, value):
+		"""
+		Given a constant (we assume this for now),
+		add an object to the arithmetic stack so it can be applied
+		later when values are checked.
+		"""
+		if self._state._arithmetic_build:
+			print("EVALUATING MULTIPLICATION OF STATE VALUE")
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticMultiply(value))
+		return self
+
+	def __add__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticAdd(value))
+		return self
+
+	def __sub__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticSubtract(value))
+		return self
+
+	def __truediv__(self, value):
+		if self._state._arithmetic_build:
+			self._state._arithmetic_stack.append(formula_tree.ArithmeticTrueDivide(value))
+		return self
+
+class StateValueType(object):
+	"""
+	Models the length being measured of a value given by a state.
+	"""
+
+	def __init__(self, state, name):
+		self._state = state
+		self._name = name
+
+	def equals(self, value):
+		"""
+		Generates an atom.
+		"""
+		return formula_tree.StateValueTypeEqualTo(
+			self._state,
+			self._name,
+			value
 		)
 
 
@@ -316,9 +445,10 @@ class StaticTransition(object):
 	Models transition that occurs during a program's runtime.
 	"""
 
-	def __init__(self, bind_variable_name, operates_on, uses=None, record=None):
+	def __init__(self, bind_variable_name, operates_on, instruction_coordinates, uses=None, record=None):
 		self._bind_variable_name = bind_variable_name
 		self._operates_on = operates_on
+		self._instruction_coordinates = instruction_coordinates
 		self._required_binding = uses
 		self._record = record
 
@@ -410,6 +540,65 @@ class Duration(object):
 		else:
 			raise Exception("Duration predicate wasn't defined properly.")
 
+	def __lt__(self, value):
+		"""
+		Generates an atom.
+		This is, for now, reserved for comparison of duration to other measurable quantities.
+		"""
+		if type(value) is StateValue:
+			return formula_tree.TransitionDurationLessThanStateValueMixed(
+					self._transition,
+					value._state,
+					value._name
+				)
+		elif type(value) is StateValueLength:
+			return formula_tree.TransitionDurationLessThanStateValueLengthMixed(
+					self._transition,
+					value._state,
+					value._name
+				)
+		elif type(value) is Duration:
+			return formula_tree.TransitionDurationLessThanTransitionDurationMixed(
+					self._transition,
+					value._transition,
+				)
+
+"""
+Syntactic sugar for time between states.
+"""
+
+def timeBetween(state1, state2):
+	return TimeBetweenStates(state1, state2)
+
+class TimeBetweenStates(object):
+	"""
+	Models the time between two states.
+	"""
+
+	def __init__(self, lhs, rhs):
+		self._lhs = lhs
+		self._rhs = rhs
+
+	def _in(self, interval):
+		"""
+		Generates an atom.
+		"""
+		if type(interval) is list:
+			return formula_tree.TimeBetweenInInterval(
+				self._lhs,
+				self._rhs,
+				interval
+			)
+		elif type(interval) is tuple:
+			return formula_tree.TimeBetweenInOpenInterval(
+				self._lhs,
+				self._rhs,
+				interval
+			)
+		else:
+			raise Exception("TimeBetween predicate wasn't defined properly.")
+
+
 def composition_sequence_from_value(sequence, current_operator):
 
 	while not(type(current_operator) in [StaticState, StaticTransition]):
@@ -442,7 +631,12 @@ def derive_composition_sequence(atom):
 	else:
 		current_operator = atom
 
-	if type(atom) == formula_tree.StateValueEqualToMixed:
+	if type(atom) in [formula_tree.StateValueEqualToMixed,
+					formula_tree.TransitionDurationLessThanTransitionDurationMixed,
+					formula_tree.TransitionDurationLessThanStateValueMixed,
+					formula_tree.TransitionDurationLessThanStateValueLengthMixed,
+					formula_tree.TimeBetweenInInterval,
+					formula_tree.TimeBetweenInOpenInterval]:
 
 		# atom is mixed - two composition sequences
 
@@ -470,7 +664,11 @@ def derive_composition_sequence(atom):
 			current_operator = current_operator._transition
 		elif type(current_operator) == formula_tree.StateValueEqualTo:
 			current_operator = current_operator._state
+		elif type(current_operator) == formula_tree.StateValueLengthInInterval:
+			current_operator = current_operator._state
 		elif type(current_operator) == formula_tree.StateValueInInterval:
+			current_operator = current_operator._state
+		elif type(current_operator) == formula_tree.StateValueTypeEqualTo:
 			current_operator = current_operator._state
 
 		sequence = composition_sequence_from_value(sequence, current_operator)

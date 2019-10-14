@@ -11,6 +11,48 @@ Author: Joshua Dawes - CERN, University of Manchester - joshua.dawes@cern.ch
 
 import datetime
 
+class ArithmeticMultiply(object):
+        def __init__(self, v):
+                self._v = v
+	def __repr__(self):
+		return "*%i" % self._v
+
+class ArithmeticAdd(object):
+        def __init__(self, v):
+                self._v = v
+	def __repr__(self):
+                return "+%i" % self._v
+
+class ArithmeticTrueDivide(object):
+        def __init__(self, v):
+                self._v = v
+	def __repr__(self):
+                return "/%i" % self._v
+
+class ArithmeticSubtract(object):
+        def __init__(self, v):
+                self._v = v
+	def __repr__(self):
+                return "-%i" % self._v
+
+def apply_arithmetic_stack(stack, observation):
+	"""
+	Given a list of lambda functions, iteratively apply them to the observation
+	to yield a final value.
+	"""
+	print("Observed value before arithmetic stack is %i" % observation)
+	current_value = observation
+	for f in stack:
+		if f.__class__.__name__ == ArithmeticMultiply.__name__:
+			current_value *= f._v
+		elif f.__class__.__name__ == ArithmeticAdd.__name__:
+			current_value += f._v
+		elif f.__class__.__name__ == ArithmeticTrueDivide.__name__:
+			current_value /= f._v
+		elif f.__class__.__name__ == ArithmeticSubtract.__name__:
+			current_value -= f._v
+	print("Observed value after arithmetic stack is %i" % current_value)
+	return current_value
 
 """
 Classes for atoms specific to this logic.
@@ -106,6 +148,30 @@ class StateValueEqualTo(Atom):
 	def check(self, value):
 		return self._value == value[0][0][self._name]
 
+class StateValueTypeEqualTo(Atom):
+	"""
+	This class models the atom (type(s(x)) = T).
+	"""
+
+	def __init__(self, state, name, value):
+		self._state = state
+		self._name = name
+		self._value = value
+		self.verdict = None
+
+	def __repr__(self):
+		return "type((%s)(%s)) = %s" % (self._state, self._name, self._value)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is StateValueTypeEqualTo:
+			return (self._state == other_atom._state and self._name == other_atom._name\
+				and self._value == other_atom._value)
+		else:
+			return False
+
+	def check(self, value):
+		return value[0][0][self._name] == self._value.__name__
+
 class StateValueEqualToMixed(Atom):
 	"""
 	This class models the atom (s1(x) = s2(y)).
@@ -136,7 +202,15 @@ class StateValueEqualToMixed(Atom):
 		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
 			return None
 		else:
-			return cummulative_state[0][0] == cummulative_state[1][0]
+			lhs_with_arithmetic = apply_arithmetic_stack(
+				self._lhs.arithmetic_stack,
+				cummulative_state[0][0]
+			)
+			rhs_with_arithmetic = apply_arithmetic_stack(
+                                self._rhs.arithmetic_stack,
+                                cummulative_state[1][0]
+                       	)
+			return lhs_with_arithmetic == rhs_with_arithmetic
 
 class StateValueLengthInInterval(Atom):
 	"""
@@ -150,7 +224,7 @@ class StateValueLengthInInterval(Atom):
 		self.verdict = None
 
 	def __repr__(self):
-		return "len(%s(%s)) in %s" % (self._state, self._name, self._interval)
+		return "(%s(%s)).length() in %s" % (self._state, self._name, self._interval)
 
 	def __eq__(self, other_atom):
 		if type(other_atom) is StateValueLengthInInterval:
@@ -163,7 +237,7 @@ class StateValueLengthInInterval(Atom):
 		"""
 		Mandatory check method used by formula trees to compute truth values.
 		"""
-		return self._interval[0] <= len(value[0][0][self._name]) <= self._interval[1]
+		return self._interval[0] <= value[0][0][self._name] <= self._interval[1]
 
 class TransitionDurationInInterval(Atom):
 	"""
@@ -186,6 +260,176 @@ class TransitionDurationInInterval(Atom):
 
 	def check(self, value):
 		return self._interval[0] <= value[0][0].total_seconds() <= self._interval[1]
+
+class TransitionDurationLessThanTransitionDurationMixed(Atom):
+	"""
+	This class models the atom (duration(t1) < duration(t2))
+	for v the duration of another transition.
+	"""
+
+	def __init__(self, lhs_transition, rhs_transition):
+		self._lhs = lhs_transition
+		self._rhs = rhs_transition
+		self.verdict = None
+
+	def __repr__(self):
+		return "d(%s) < d(%s)" % (self._lhs, self._rhs)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TransitionDurationLessThanTransitionDurationMixed:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs)
+		else:
+			return False
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check for equality.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+			return cummulative_state[0][0] < cummulative_state[1][0]
+
+
+class TransitionDurationLessThanStateValueMixed(Atom):
+	"""
+	This class models the atom (duration(t) < v)
+	for v a value given by a state.
+	"""
+
+	def __init__(self, transition, state, name):
+		self._lhs = transition
+		self._rhs = state
+		self._rhs_name = name
+		self.verdict = None
+
+	def __repr__(self):
+		return "d(%s) < (%s)(%s)" % (self._lhs, self._rhs, self._rhs_name)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TransitionDurationLessThanStateValueMixed:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs and
+				self._rhs_name == other_atom._rhs_name)
+		else:
+			return False
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check for equality.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+                        rhs_with_arithmetic = apply_arithmetic_stack(
+                                self._rhs._arithmetic_stack,
+                                cummulative_state[1][0][self._rhs_name]
+                        )
+			return cummulative_state[0][0].total_seconds() < rhs_with_arithmetic
+
+class TransitionDurationLessThanStateValueLengthMixed(Atom):
+	"""
+	This class models the atom (duration(t) < v.length())
+	for v a value given by a state.
+	"""
+
+	def __init__(self, transition, state, name):
+		self._lhs = transition
+		self._rhs = state
+		self._rhs_name = name
+		self.verdict = None
+
+	def __repr__(self):
+		return "d(%s) < (%s)(%s).length()" % (self._lhs, self._rhs, self._rhs_name)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TransitionDurationLessThanStateValueLengthMixed:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs and
+				self._rhs_name == other_atom._rhs_name)
+		else:
+			return False
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check for equality.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+                        rhs_with_arithmetic = apply_arithmetic_stack(
+                                self._rhs._arithmetic_stack,
+                                cummulative_state[1][0][self._rhs_name]
+                        )
+			return cummulative_state[0][0].total_seconds() < rhs_with_arithmetic
+
+class TimeBetweenInInterval(Atom):
+	"""
+	This class models the atom (timeBetween(q1, q2)._in([n, m]))
+	for q1, q2 states and n, m constants.
+	"""
+
+	def __init__(self, lhs, rhs, interval):
+		self._lhs = lhs
+		self._rhs = rhs
+		self._interval = interval
+		self.verdict = None
+
+	def __repr__(self):
+		return "timeBetween(%s, %s) in %s" % (self._lhs, self._rhs, self._interval)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TimeBetweenInInterval:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs and
+				self._interval == other_atom._interval)
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check the values.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+			# measure the time difference and check for containment in the interval
+			return self._interval[0] <= (cummulative_state[1][0]["time"] - cummulative_state[0][0]["time"]).total_seconds() <= self._interval[1]
+
+class TimeBetweenInOpenInterval(Atom):
+	"""
+	This class models the atom (timeBetween(q1, q2)._in((n, m))
+	for q1, q2 states and n, m constants.
+	"""
+
+	def __init__(self, lhs, rhs, interval):
+		self._lhs = lhs
+		self._rhs = rhs
+		self._interval = interval
+		self.verdict = None
+
+	def __repr__(self):
+		return "timeBetween(%s, %s) in %i" % (self._lhs, self._rhs, self._interval)
+
+	def __eq__(self, other_atom):
+		if type(other_atom) is TimeBetweenInInterval:
+			return (self._lhs == other_atom._lhs and
+				self._rhs == other_atom._rhs and
+				self._interval == other_atom._interval)
+
+	def check(self, cummulative_state):
+		"""
+		If either the RHS or LHS are None, we don't try to reach a truth value.
+		But if they are both not equal to None, we check the values.
+		"""
+		if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+			return None
+		else:
+			# measure the time difference and check for containment in the interval
+			return self._interval[0] < (cummulative_state[1][0]["time"] - cummulative_state[0][0]["time"]).total_seconds() < self._interval[1]
 
 """
 Classes for propositional logical connectives.
@@ -461,6 +705,7 @@ class Checker(object):
 		self.atom_to_program_path = {}
 		self.atom_to_state_dict = {}
 		self.collapsing_atom = None
+		self.collapsing_atom_sub_index = None
 		# we use a tuple to record the instantiation time for each encountered bind variable
 		self._monitor_instantiation_time = (datetime.datetime.now(),)
 
@@ -574,7 +819,9 @@ class Checker(object):
 
 		if not(self.atom_to_observation[atom_index].get(atom_sub_index)):
 			self.atom_to_observation[atom_index][atom_sub_index] = (value, inst_point_id)
-			self.atom_to_program_path[atom_index][atom_sub_index] = [v for v in program_path]
+			#self.atom_to_program_path[atom_index][atom_sub_index] = [v for v in program_path]
+			# we deal with integer indices now, so no need to copy a list
+			self.atom_to_program_path[atom_index][atom_sub_index] = program_path
 			self.atom_to_state_dict[atom_index][atom_sub_index] = state_dict
 		else:
 			# the observation has already been processed - no need to do anything
@@ -584,7 +831,10 @@ class Checker(object):
 		initial_verdict = self._formula.verdict
 		
 		print("PROCESSING ATOM %s" % atom)
-		if type(atom) is StateValueInInterval:
+
+		result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
+
+		"""if type(atom) is StateValueInInterval:
 			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 		elif type(atom) is TransitionDurationInInterval:
 			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
@@ -594,12 +844,15 @@ class Checker(object):
 			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 		elif type(atom) is StateValueEqualToMixed:
 			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
+		elif type(atom) is StateValueEqualToMixed:
+			result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])"""
 
 		final_verdict = self._formula.verdict
 
 		if initial_verdict != final_verdict:
 			# for each monitor, this branch can only ever be traversed once
 			self.collapsing_atom = atom
+			self.collapsing_atom_sub_index = atom_sub_index
 
 		return result
 
