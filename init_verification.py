@@ -407,22 +407,14 @@ class PropertyMapGroup(object):
 
 		# reconstruct formula structure
 		# there's probably a better way to do this
-		print("before first evaluation")
-		print("formula being imported")
 		exec("".join(open("verification_conf.py", "r").readlines()))
-		print("formula imported")
-		print("after first evaluation")
 		index_to_hash = pickle.loads(index_to_hash_dump)
 		property_index = index_to_hash.index(property_hash)
 
 		print(function_name, property_index)
 		
 		# might just change the syntax in the verification conf file at some point to use : instead of .
-		print("before second evaluation")
 		self.formula_structure = verification_conf[module_name][function_name.replace(":", ".")][property_index]
-		print("after second evaluation")
-		print(self.formula_structure)
-		print("after formula structure output")
 		self.binding_space = pickle.loads(binding_space_dump)
 		self.static_qd_to_point_map = pickle.loads(instr_map_dump)
 		self.static_qd_to_monitors = {}
@@ -458,8 +450,10 @@ class Verification(object):
 		# try to connect to the verdict server before we set anything up
 		try:
 			attempt = requests.get(VERDICT_SERVER_URL)
+			self.initialisation_failure = False
 		except Exception:
 			vypr_output("Couldn't connect to the verdict server at '%s'.  Initialisation failed." % VERDICT_SERVER_URL)
+			self.initialisation_failure = True
 			return
 
 		if flask_object:
@@ -477,19 +471,19 @@ class Verification(object):
 				verification.end_monitoring()
 				# wait for the thread to end
 				verification.consumption_thread.join()
-				return "VyPR monitoring thread exited.  The server must be restarted to turn monitoring back on."
+				return "VyPR monitoring thread exited.  The server must be restarted to turn monitoring back on.\n"
 
 			@flask_object.route("/vypr/pause-monitoring/")
 			def endpoint_pause_monitoring():
 				from app import verification
 				verification.pause_monitoring()
-				return "VyPR monitoring paused - thread is still running."
+				return "VyPR monitoring paused - thread is still running.\n"
 
 			@flask_object.route("/vypr/resume-monitoring/")
 			def endpoint_resume_monitoring():
 				from app import verification
 				verification.resume_monitoring()
-				return "VyPR monitoring resumed."
+				return "VyPR monitoring resumed.\n"
 
 		# set up the maps that the monitoring algorithm that the consumption thread runs
 
@@ -516,13 +510,10 @@ class Verification(object):
 			vypr_output("Setting up monitoring state for module/function/property triple %s, %s, %s" % (module_string, function, property_hash))
 
 			module_function_string = "%s.%s" % (module_string, function)
-			
-			print("before first evaluation")
 
 			if not(self.function_to_maps.get(module_function_string)):
 				self.function_to_maps[module_function_string] = {}
 			self.function_to_maps[module_function_string][property_hash] = PropertyMapGroup(module_string, function, property_hash)
-			print("after first evaluation")
 
 		vypr_output(self.function_to_maps)
 
@@ -540,17 +531,21 @@ class Verification(object):
 		vypr_output("VyPR monitoring initialisation finished.")
 
 	def send_event(self, event_description):
-		vypr_output("adding %s to consumption queue" % str(event_description))
-		self.consumption_queue.put(event_description)
+		if not(self.initialisation_failure):
+			vypr_output("adding %s to consumption queue" % str(event_description))
+			self.consumption_queue.put(event_description)
 
 	def end_monitoring(self):
-		vypr_output("ending VyPR monitoring")
-		self.consumption_queue.put(("end-monitoring",))
+		if not(self.initialisation_failure):
+			vypr_output("ending VyPR monitoring")
+			self.consumption_queue.put(("end-monitoring",))
 
 	def pause_monitoring(self):
-		vypr_output("Sending monitoring pause message.")
-		self.consumption_queue.put(("inactive-monitoring-start",))
+		if not(self.initialisation_failure):
+			vypr_output("Sending monitoring pause message.")
+			self.consumption_queue.put(("inactive-monitoring-start",))
 
 	def resume_monitoring(self):
-		vypr_output("Sending monitoring resume message.")
-		self.consumption_queue.put(("inactive-monitoring-stop",))
+		if not(self.initialisation_failure):
+			vypr_output("Sending monitoring resume message.")
+			self.consumption_queue.put(("inactive-monitoring-stop",))
