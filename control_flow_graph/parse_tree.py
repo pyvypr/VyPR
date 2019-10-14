@@ -43,8 +43,8 @@ class ParseTree(object):
 	"""
 	def __init__(self, path=None, rules=None, starting_vertex=None, empty=False, parametric=False):
 		if not(empty):
-			print("building parse tree for path with length %i" % len(path))
-			print(path)
+			#print("building parse tree for path with length %i" % len(path))
+			#print(path)
 			self._root_vertex = ParseTreeVertex(starting_vertex)
 			self._vertices = [self._root_vertex]
 			self._rules = rules
@@ -95,7 +95,7 @@ class ParseTree(object):
 				# terminal symbol
 				self._path_progress.append(symbol)
 				if self._path_progress == self._target_path:
-					print("target path generated early")
+					#print("target path generated early")
 					return False
 			elif type(symbol) is CFGVertex:
 				# non-terminal symbol
@@ -103,9 +103,10 @@ class ParseTree(object):
 				if result == False:
 					return False
 			else:
-				print("reached None - path generated of length %i is" % len(self._path_progress))
-				print(self._path_progress)
-				print("-"*100)
+				pass
+				#print("reached None - path generated of length %i is" % len(self._path_progress))
+				#print(self._path_progress)
+				#print("-"*100)
 
 	def expand_vertex_parametric(self, vertex):
 		"""
@@ -119,12 +120,12 @@ class ParseTree(object):
 		if type(vertex._symbol) is CFGVertex:
 			if (self._path_progress + [vertex._symbol]) == self._target_path:
 				# we can just return without expanding further
-				print("parametric path generated early")
+				#print("parametric path generated early")
 				self._path_progress.append(vertex._symbol)
 				return False
 			elif (self._path_progress + [vertex._symbol]) ==\
 					self._target_path[:len(self._path_progress)+1]:
-				print("one parameter generated - returning, but not stopping traversal")
+				#print("one parameter generated - returning, but not stopping traversal")
 				self._path_progress.append(vertex._symbol)
 				return True
 		# get the rules associated with the symbol held by this vertex
@@ -147,7 +148,7 @@ class ParseTree(object):
 				# terminal symbol
 				self._path_progress.append(symbol)
 				if self._path_progress == self._target_path:
-					print("target path generated early")
+					#print("target path generated early")
 					return False
 			elif type(symbol) is CFGVertex:
 				# non-terminal symbol
@@ -220,7 +221,7 @@ class ParseTree(object):
 						if not(found):
 							# we found a disagreement, so trim this path
 							trim_index = path_index+1
-							print("disagreement found at position %i" % trim_index)
+							#print("disagreement found at position %i" % trim_index)
 							break
 					else:
 						# do nothing - we exhausted the path without encountering disagreement
