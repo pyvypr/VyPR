@@ -14,7 +14,6 @@ We use this to build parse trees of paths wrt grammars derived from SCFGs.
 """
 
 import pprint
-from graphviz import Digraph
 
 from VyPR.control_flow_graph.construction import CFGVertex, CFGEdge
 
@@ -337,6 +336,7 @@ class ParseTree(object):
 		"""
 		Given a parse tree for a path wrt a scfg, write a dot file.
 		"""
+		from graphviz import Digraph
 		graph = Digraph()
 		graph.attr("graph", splines="true", fontsize="10")
 		shape = "rectangle"
