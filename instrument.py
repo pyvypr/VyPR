@@ -35,6 +35,7 @@ VERBOSE = False
 EXPLANATION = False
 DRAW_GRAPHS = False
 VERIFICATION_HOME_MODULE = None
+BYTECODE_EXTENSION = ".pyc"
 
 """def print(*s):
 	global VERBOSE
@@ -455,7 +456,9 @@ if __name__ == "__main__":
 		if inst_configuration.get("verdict_server_url") else "http://localhost:9001/"
 	EXPLANATION = inst_configuration.get("explanation") == "on"
 	VERIFICATION_HOME_MODULE = inst_configuration.get("verification_home_module")\
-                if inst_configuration.get("verification_home_module") else "app"
+		if inst_configuration.get("verification_home_module") else "app"
+	BYTECODE_EXTENSION = inst_configuration.get("bytecode_extension")\
+		if inst_configuration.get("bytecode_extension") else ".pyc"
 
 	# reset code to non-instrumented
 	for directory in os.walk("."):
@@ -466,7 +469,7 @@ if __name__ == "__main__":
 					# rename to .py
 					os.rename(f, f.replace(".py.inst", ".py"))
 					# delete bytecode
-					os.remove(f.replace(".py.inst", ".pyc"))
+					os.remove(f.replace(".py.inst", BYTECODE_EXTENSION))
 					print("reset file %s to uninstrumented version" % f)
 
 	# load in verification config file
@@ -1182,7 +1185,7 @@ if __name__ == "__main__":
 		instrumented_code = compile(asts, backup_file_name, "exec")
 
 		# append an underscore to indicate that it's instrumented - removed for now
-		instrumented_file_name = "%s.pyc" % file_name_without_extension
+		instrumented_file_name = "%s%s" % (file_name_without_extension, BYTECODE_EXTENSION)
 
 		print("writing instrumented code to %s" % instrumented_file_name)
 
