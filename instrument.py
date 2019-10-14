@@ -15,7 +15,6 @@ import time
 import pprint
 import sqlite3
 import pickle
-from graphviz import Digraph
 import hashlib
 import requests
 import inspect
@@ -216,6 +215,7 @@ def write_scfg_to_file(scfg, file_name):
 	Given an scfg and a file name, write the scfg in dot format to the file.
 	"""
 	if DRAW_GRAPHS:
+		from graphviz import Digraph
 		graph = Digraph()
 		graph.attr("graph", splines="true", fontsize="10")
 		shape = "rectangle"
