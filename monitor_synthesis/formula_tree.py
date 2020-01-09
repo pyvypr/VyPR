@@ -439,7 +439,7 @@ class TimeBetweenInOpenInterval(Atom):
         self.verdict = None
 
     def __repr__(self):
-        return "timeBetween(%s, %s) in %i" % (self._lhs, self._rhs, self._interval)
+        return "timeBetween(%s, %s) in %s" % (self._lhs, self._rhs, str(self._interval))
 
     def __eq__(self, other_atom):
         if type(other_atom) is TimeBetweenInInterval:

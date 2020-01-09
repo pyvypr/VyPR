@@ -11,7 +11,6 @@ import threading
 import traceback
 
 from queue import Queue
-import flask
 import requests
 from VyPR.control_flow_graph.construction import CFGEdge, CFGVertex
 from VyPR.formula_building.formula_building import *
@@ -103,8 +102,9 @@ def send_verdict_report(function_name, time_of_call, end_time_of_call, program_p
 
     # send request
     try:
-        response = requests.post(os.path.join(VERDICT_SERVER_URL, "register_verdicts/"),
-                                 data=json.dumps(request_body_dict, default=to_timestamp))
+        print("sending verdicts")
+        #response = requests.post(os.path.join(VERDICT_SERVER_URL, "register_verdicts/"),
+        #                         data=json.dumps(request_body_dict, default=to_timestamp))
     except Exception as e:
         vypr_output(
             "Something went wrong when sending verdict information to the verdict server.  The verdict information we tried to send is now lost.")
@@ -429,7 +429,7 @@ class PropertyMapGroup(object):
         # there's probably a better way to do this
         #exec("".join(open(verification_conf_file, "r").readlines()))
 
-        from verification_conf import verification_conf
+        from VyPR_queries import verification_conf
         
         index_to_hash = pickle.loads(index_to_hash_dump)
         property_index = index_to_hash.index(property_hash)
@@ -485,7 +485,7 @@ class Verification(object):
             self.initialisation_failure = True
             return
 
-    def init_app(self, flask_object=None):
+    def initialise(self):
 
         vypr_output("Initialising VyPR alongside service.")
 
@@ -497,7 +497,7 @@ class Verification(object):
         VYPR_OUTPUT_VERBOSE = inst_configuration.get("verbose") if inst_configuration.get("verbose") else True
         PROJECT_ROOT = inst_configuration.get("project_root") if inst_configuration.get("project_root") else ""
 
-        if flask_object:
+        """if flask_object:
             def prepare_vypr():
                 import datetime
                 # this function runs inside a request, so flask.g exists
@@ -528,6 +528,7 @@ class Verification(object):
                 from app import verification
                 verification.resume_monitoring()
                 return "VyPR monitoring resumed.\n"
+        """
 
         # set up the maps that the monitoring algorithm that the consumption thread runs
 
@@ -578,7 +579,6 @@ class Verification(object):
         vypr_output("VyPR monitoring initialisation finished.")
 
     def send_event(self, event_description):
-        flask.current_app.logger.info("sending event to monitoring thread")
         if not (self.initialisation_failure):
             self.consumption_queue.put(event_description)
 

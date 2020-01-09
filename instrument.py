@@ -23,8 +23,9 @@ import os
 import json
 import base64
 
-# for now, we remove VyPR from the first path to look in for modules
-sys.path[0] = sys.path[0].replace("/VyPR", "")
+# for now, we remove the final occurrence of VyPR from the first path to look in for modules
+rindex = sys.path[0].rfind("/VyPR")
+sys.path[0] = sys.path[0][:rindex] + sys.path[0][rindex+len("/VyPR"):]
 
 # get the formula building functions before we evaluate the configuration code
 from VyPR.formula_building.formula_building import *

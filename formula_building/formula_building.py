@@ -227,7 +227,7 @@ def requires_state_or_transition(obj):
     is a primitive type that we don't need to observe anything for,
     or derived from a state or transition
     """
-    return type(obj) in [StateValue, StaticStateLength]
+    return type(obj) in [StateValue, StateValueLength]
 
 
 class StaticState(object):
