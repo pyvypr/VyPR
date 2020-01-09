@@ -31,7 +31,7 @@ def get_function_name_strings(obj):
     found in the object.
     """
     chain = list(ast.walk(obj))
-    all_calls = filter(lambda item: type(item) is ast.Call, chain)
+    all_calls = list(filter(lambda item: type(item) is ast.Call, chain))
     ##print(all_calls)
     full_names = {}
     for call in all_calls:
@@ -52,7 +52,7 @@ def get_function_name_strings(obj):
                 current_item = current_item.s
             elif type(current_item) is ast.Subscript:
                 current_item = current_item.value
-    return map(lambda item: ".".join(reversed(item)), full_names.values())
+    return list(map(lambda item: ".".join(reversed(item)), full_names.values()))
 
 
 def get_reversed_string_list(obj, omit_subscripts=False):
@@ -126,8 +126,8 @@ class CFGVertex(object):
                 # only works for a single function being called - should make this recursive
                 # for complex expressions that require multiple calls
                 if type(entry.targets[0]) is ast.Tuple:
-                    self._name_changed = map(get_attr_name_string, entry.targets[0].elts) + get_function_name_strings(
-                        entry)
+                    self._name_changed = list(map(get_attr_name_string, entry.targets[0].elts) + get_function_name_strings(
+                        entry))
                 else:
                     self._name_changed = [get_attr_name_string(entry.targets[0])] + get_function_name_strings(entry)
             # TODO: include case where the expression on the right hand side of the assignment is an expression with a call
@@ -145,8 +145,6 @@ class CFGVertex(object):
                     self._name_changed = []
             elif type(entry) is ast.Raise:
                 self._name_changed = [entry.type.func.id]
-            elif type(entry) is ast.Print:
-                self._name_changed = ["print"]
             elif type(entry) is ast.Pass:
                 self._name_changed = ["pass"]
 
@@ -179,9 +177,9 @@ class CFGEdge(object):
         if type(self._instruction) is ast.Assign and type(self._instruction.value) in [ast.Call, ast.Expr]:
             # we will have to deal with other kinds of expressions at some point
             if type(self._instruction.targets[0]) is ast.Tuple:
-                self._operates_on = map(get_attr_name_string,
+                self._operates_on = list(map(get_attr_name_string,
                                         self._instruction.targets[0].elts) + get_function_name_strings(
-                    self._instruction.value)
+                    self._instruction.value))
             else:
                 self._operates_on = [get_attr_name_string(self._instruction.targets[0])] + \
                                     get_function_name_strings(self._instruction.value)
@@ -345,30 +343,6 @@ class CFG(object):
                 # update current vertices
                 current_vertices = [new_vertex]
 
-            elif type(entry) is ast.Print:
-                path_length += 1
-
-                # condition_to_use = condition if n == 0 else []
-
-                new_edges = []
-                for vertex in current_vertices:
-                    entry._parent_body = block
-                    new_edge = CFGEdge(condition, entry, input_variables=input_variables_copy)
-                    new_edges.append(new_edge)
-                    vertex.add_outgoing_edge(new_edge)
-
-                new_vertex = CFGVertex(entry, path_length=path_length)
-
-                self.vertices.append(new_vertex)
-                self.edges += new_edges
-
-                # direct all new edges to this new vertex
-                for edge in new_edges:
-                    edge.set_target_state(new_vertex)
-
-                # update current vertices
-                current_vertices = [new_vertex]
-
             elif type(entry) is ast.If:
                 entry._parent_body = block
                 # print("Processing conditional at line %i with parent block %s" % (entry.lineno, entry._parent_body))
@@ -439,11 +413,11 @@ class CFG(object):
 
                 # filter out vertices that were returns or raises
                 # here we have to check for the previous edge existing, in case the program starts with a conditional
-                current_vertices = filter(
+                current_vertices = list(filter(
                     lambda vertex: vertex._previous_edge is None or not (
                             type(vertex._previous_edge._instruction) in [ast.Return, ast.Raise]),
                     current_vertices
-                )
+                ))
 
                 # add an empty "control flow" vertex after the conditional
                 # to avoid transition duplication along the edges leaving
@@ -474,7 +448,7 @@ class CFG(object):
                 # reset path length for instructions after conditional
                 path_length = 0
 
-            elif type(entry) is ast.TryExcept:
+            elif type(entry) is ast.Try:
                 entry._parent_body = block
                 path_length += 1
                 # print("processing try-except")
@@ -531,11 +505,11 @@ class CFG(object):
 
                 # filter out vertices that were returns or raises
                 # this should be applied to the other cases as well - needs testing
-                current_vertices = filter(
+                current_vertices = list(filter(
                     lambda vertex: vertex._previous_edge is None or not (
                             type(vertex._previous_edge._instruction) in [ast.Return, ast.Raise]),
                     current_vertices
-                )
+                ))
 
                 # print("processing try-except end statements")
                 # print(current_vertices)
@@ -587,7 +561,7 @@ class CFG(object):
                 if type(loop_variable) is ast.Name:
                     additional_input_variables = [loop_variable.id]
                 elif type(loop_variable) is ast.Tuple:
-                    additional_input_variables = map(lambda item: item.id, loop_variable.elts)
+                    additional_input_variables = list(map(lambda item: item.id, loop_variable.elts))
                 final_vertices = self.process_block(entry.body, current_vertices, ['enter-loop'],
                                                     input_variables=input_variables_copy + additional_input_variables)
 
@@ -676,15 +650,15 @@ class CFG(object):
                         final_map[vertex] = [[vertex.edges[0]]]
                     elif any(map(lambda edge: edge._target_state._name_changed == ["post-loop"], vertex.edges)):
                         # we have to deal with some branching
-                        reloop_edge = filter(lambda edge: edge._target_state._name_changed == ["loop"], vertex.edges)[0]
+                        reloop_edge = list(filter(lambda edge: edge._target_state._name_changed == ["loop"], vertex.edges))[0]
                         loop_skip_edge = \
-                            filter(lambda edge: edge._target_state._name_changed != ["loop"], vertex.edges)[0]
+                            list(filter(lambda edge: edge._target_state._name_changed != ["loop"], vertex.edges))[0]
                         final_map[vertex] = [[reloop_edge, reloop_edge._target_state], [loop_skip_edge]]
                     elif vertex.edges[0]._target_state._name_changed == ["loop"]:
-                        post_loop_vertex = filter(
+                        post_loop_vertex = list(filter(
                             lambda edge: edge._target_state._name_changed == ["post-loop"],
                             vertex.edges[0]._target_state.edges
-                        )[0]._target_state
+                        ))[0]._target_state
                         final_map[vertex] = [[vertex.edges[0], vertex.edges[0]._target_state, post_loop_vertex]]
                     else:
                         # normal vertex that isn't followed by any special structure
@@ -715,9 +689,9 @@ class CFG(object):
             elif vertex._name_changed == ["loop"]:
 
                 # find the loop-skip edge
-                loop_skip_edge = filter(lambda edge: edge._target_state._name_changed == ["post-loop"], vertex.edges)[0]
+                loop_skip_edge = list(filter(lambda edge: edge._target_state._name_changed == ["post-loop"], vertex.edges))[0]
                 final_map[vertex] = [[loop_skip_edge]]
-                loop_entry_edge = filter(lambda edge: edge._target_state._name_changed != ["post-loop"], vertex.edges)[
+                loop_entry_edge = list(filter(lambda edge: edge._target_state._name_changed != ["post-loop"], vertex.edges))[
                     0]
                 final_map[vertex].append([loop_entry_edge, loop_entry_edge._target_state])
 

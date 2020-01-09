@@ -18,9 +18,10 @@ import pickle
 import hashlib
 import requests
 import inspect
-import json
 import argparse
 import os
+import json
+import base64
 
 # for now, we remove VyPR from the first path to look in for modules
 sys.path[0] = sys.path[0].replace("/VyPR", "")
@@ -89,19 +90,19 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
     if len(current_binding) == 0:
         # we've just started - compute the static qd for the first quantifier,
         # then iterate over it and recurse into the list of quantifiers for each element
-        if type(quantifier_sequence._bind_variables[0]) is StaticState:
-            if quantifier_sequence._bind_variables[0]._name_changed:
+        if type(list(quantifier_sequence._bind_variables)[0]) is StaticState:
+            if list(quantifier_sequence._bind_variables)[0]._name_changed:
                 # a name was given as selection criteria
-                variable_changed = quantifier_sequence._bind_variables[0]._name_changed
-                qd = filter(lambda symbolic_state: symbolic_state._name_changed == variable_changed \
-                                                   or variable_changed in symbolic_state._name_changed, scfg.vertices)
+                variable_changed = list(quantifier_sequence._bind_variables)[0]._name_changed
+                qd = list(filter(lambda symbolic_state: symbolic_state._name_changed == variable_changed \
+                                                   or variable_changed in symbolic_state._name_changed, scfg.vertices))
             else:
                 qd = []
                 # a list of coordinates were given
-                if type(quantifier_sequence._bind_variables[0]._instruction_coordinates) is list:
-                    coordinates = quantifier_sequence._bind_variables[0]._instruction_coordinates
+                if type(list(quantifier_sequence._bind_variables)[0]._instruction_coordinates) is list:
+                    coordinates = list(quantifier_sequence._bind_variables)[0]._instruction_coordinates
                 else:
-                    coordinates = [quantifier_sequence._bind_variables[0]._instruction_coordinates]
+                    coordinates = [list(quantifier_sequence._bind_variables)[0]._instruction_coordinates]
                 for coordinate in coordinates:
                     # get all vertices whose previous edges have statements with matching lineno values,
                     # sort the col_offset values in ascending order, then get the vertex at the index
@@ -115,23 +116,23 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
                             offset = 0
                         else:
                             offset = coordinate[1]
-                    relevant_vertices = filter(
+                    relevant_vertices = list(filter(
                         lambda symbolic_state: not (symbolic_state._previous_edge is None) \
                                                and not (type(symbolic_state._previous_edge._instruction) is str) \
                                                and symbolic_state._previous_edge._instruction.lineno == line_number,
                         scfg.vertices
-                    )
+                    ))
                     relevant_vertices.sort(key=lambda vertex: vertex._previous_edge._instruction.col_offset)
                     relevant_vertex = relevant_vertices[offset]
                     qd.append(relevant_vertex)
-        elif type(quantifier_sequence._bind_variables[0]) is StaticTransition:
-            variable_operated_on = quantifier_sequence._bind_variables[0]._operates_on
-            relevant_target_vertices = filter(
+        elif type(list(quantifier_sequence._bind_variables)[0]) is StaticTransition:
+            variable_operated_on = list(quantifier_sequence._bind_variables)[0]._operates_on
+            relevant_target_vertices = list(filter(
                 lambda symbolic_state: symbolic_state._name_changed == variable_operated_on \
                                        or variable_operated_on in symbolic_state._name_changed,
                 scfg.vertices
-            )
-            qd = map(lambda symbolic_state: symbolic_state._previous_edge, relevant_target_vertices)
+            ))
+            qd = list(map(lambda symbolic_state: symbolic_state._previous_edge, relevant_target_vertices))
 
         print("computed independent qd: %s" % qd)
         binding_space = []
@@ -141,13 +142,13 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
 
         print("computed whole binding space")
         return binding_space
-    elif len(current_binding) < len(quantifier_sequence._bind_variables):
+    elif len(current_binding) < len(list(quantifier_sequence._bind_variables)):
         # we have a partial binding
         # find the next quantifier
         next_index = len(current_binding)
-        next_quantifier = quantifier_sequence._bind_variables[next_index]
+        next_quantifier = list(quantifier_sequence._bind_variables)[next_index]
         # find the position in the quantifier sequence on which the next quantifier depends
-        index_in_quantifier_sequence = quantifier_sequence._bind_variables.index(next_quantifier._required_binding)
+        index_in_quantifier_sequence = list(quantifier_sequence._bind_variables).index(next_quantifier._required_binding)
         # get the current value at that position in the binding we have
         current_binding_value = current_binding[index_in_quantifier_sequence]
         # use the type of the qd we need to traverse the scfg from this point
@@ -158,10 +159,10 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
                 next_quantifier, current_binding))
             # only works for vertex inputs this has to cater for edges that are both assignments and function calls (
             # assignments of function call return values)
-            qd = filter(lambda edge: hasattr(edge, "_operates_on") and \
+            qd = list(filter(lambda edge: hasattr(edge, "_operates_on") and \
                                      (edge._operates_on == next_quantifier._operates_on or \
                                       next_quantifier._operates_on in edge._operates_on),
-                        reachability_map[current_binding_value])
+                        reachability_map[current_binding_value]))
 
             # compute the bindings from this new qd
             binding_space = []
@@ -529,7 +530,8 @@ if __name__ == "__main__":
         # add necessary imports for instruments to work
         if USE_FLASK:
             # if we're using flask, we assume a certain architecture
-            import_code = "from %s import verification; import flask" % VERIFICATION_HOME_MODULE
+            #import_code = "from %s import verification; import flask" % VERIFICATION_HOME_MODULE
+            import_code = "from .. import verification; import flask"
             import_asts = ast.parse(import_code)
 
             verification_import = import_asts.body[0]
@@ -564,19 +566,19 @@ if __name__ == "__main__":
             # traverse sub structures
 
             for step in hierarchy:
-                current_step = filter(
+                current_step = list(filter(
                     lambda entry: (type(entry) is ast.ClassDef and
                                    entry.name == step),
                     current_step
-                )[0]
+                ))[0]
 
             # find the final function definition
 
-            function_def = filter(
+            function_def = list(filter(
                 lambda entry: (type(entry) is ast.FunctionDef and
                                entry.name == actual_function_name),
                 current_step.body if type(current_step) is ast.ClassDef else current_step
-            )[0]
+            ))[0]
 
             # get all reference variables
             reference_variables = []
@@ -614,12 +616,14 @@ if __name__ == "__main__":
                 atoms = formula_structure._formula_atoms
 
                 formula_hash = hashlib.sha1()
-                serialised_bind_variables = pickle.dumps(formula_structure.bind_variables)
+                serialised_bind_variables = base64.encodestring(pickle.dumps(formula_structure.bind_variables))
                 formula_hash.update(serialised_bind_variables)
-                serialised_formula_structure = pickle.dumps(formula_structure.get_formula_instance())
+                serialised_bind_variables = serialised_bind_variables.decode('ascii')
+                serialised_formula_structure = base64.encodestring(pickle.dumps(formula_structure.get_formula_instance()))
                 formula_hash.update(serialised_formula_structure)
+                serialised_formula_structure = serialised_formula_structure.decode('ascii')
                 formula_hash = formula_hash.hexdigest()
-                serialised_atom_list = map(pickle.dumps, atoms)
+                serialised_atom_list = list(map(lambda item : base64.encodestring(pickle.dumps(item)).decode('ascii'), atoms))
 
                 # update the index -> hash map
                 index_to_hash.append(formula_hash)
@@ -645,18 +649,18 @@ if __name__ == "__main__":
                 # we attach indices to atoms because we need their index in the set of atoms
                 # of the relevant formula
                 initial_property_dict = {
-                    "formula_hash": formula_hash,
-                    "function": instrument_function_qualifier,
-                    "serialised_formula_structure": serialised_formula_structure,
-                    "serialised_bind_variables": serialised_bind_variables,
-                    "serialised_atom_list": list(enumerate(serialised_atom_list))
+                  "formula_hash" : formula_hash,
+                  "function": instrument_function_qualifier,
+                  "serialised_formula_structure": serialised_formula_structure,
+                  "serialised_bind_variables": serialised_bind_variables,
+                  "serialised_atom_list": list(enumerate(serialised_atom_list))
                 }
 
                 # send instrumentation data to the verdict database
                 try:
                     print(
                         "SENDING PROPERTY %s FOR FUNCTION %s IN MODULE %s TO SERVER" % (formula_hash, function, module))
-                    response = post_to_verdict_server("store_property/", data=json.dumps(initial_property_dict))
+                    response = str(post_to_verdict_server("store_property/", data=json.dumps(initial_property_dict)))
                     print("property sent to server")
                     response = json.loads(response)
                     atom_index_to_db_index = response["atom_index_to_db_index"]
@@ -664,6 +668,7 @@ if __name__ == "__main__":
                     print("atom index to db index map")
                     print(atom_index_to_db_index)
                 except:
+                    traceback.print_exc()
                     print(
                         "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
                     exit()
@@ -678,13 +683,14 @@ if __name__ == "__main__":
                     binding_dictionary = {
                         "binding_space_index": m,
                         "function": function_id,
-                        "binding_statement_lines": map(get_line_number, element)
+                        "binding_statement_lines": list(map(get_line_number, element))
                     }
                     serialised_binding_dictionary = json.dumps(binding_dictionary)
                     try:
                         binding_db_id = int(
                             post_to_verdict_server("store_binding/", data=serialised_binding_dictionary))
                     except:
+                        traceback.print_exc()
                         print(
                             "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
                         exit()
@@ -708,12 +714,12 @@ if __name__ == "__main__":
                             # get lhs and rhs bind variables
                             lhs_comp_sequence = composition_sequences["lhs"]
                             lhs_bind_variable = lhs_comp_sequence[-1]
-                            lhs_bind_variable_index = formula_structure._bind_variables.index(lhs_bind_variable)
+                            lhs_bind_variable_index = list(formula_structure._bind_variables).index(lhs_bind_variable)
                             lhs_starting_point = element[lhs_bind_variable_index]
 
                             rhs_comp_sequence = composition_sequences["rhs"]
                             rhs_bind_variable = rhs_comp_sequence[-1]
-                            rhs_bind_variable_index = formula_structure._bind_variables.index(rhs_bind_variable)
+                            rhs_bind_variable_index = list(formula_structure._bind_variables).index(rhs_bind_variable)
                             rhs_starting_point = element[rhs_bind_variable_index]
 
                             lhs_moves = list(reversed(lhs_comp_sequence[1:-1]))
@@ -737,7 +743,7 @@ if __name__ == "__main__":
 
                             composition_sequence = derive_composition_sequence(atom)
                             bind_variable = composition_sequence[-1]
-                            variable_index = formula_structure._bind_variables.index(bind_variable)
+                            variable_index = list(formula_structure._bind_variables).index(bind_variable)
                             value_from_binding = element[variable_index]
                             moves = list(reversed(composition_sequence[1:-1]))
                             instrumentation_points = get_instrumentation_points_from_comp_sequence(value_from_binding,
@@ -800,9 +806,9 @@ if __name__ == "__main__":
                                 atom_index_in_db = atom_index_to_db_index[atom_index]
                                 instrumentation_point_dictionary = {
                                     "binding": binding_db_id,
-                                    "serialised_condition_sequence": map(pickle.dumps,
+                                    "serialised_condition_sequence": list(map(pickle.dumps,
                                                                          point._previous_edge._condition if type(
-                                                                             point) is CFGVertex else point._condition),
+                                                                             point) is CFGVertex else point._condition)),
                                     "reaching_path_length": point._path_length if type(
                                         point) is CFGVertex else point._target_state._path_length,
                                     "atom": atom_index_to_db_index[atom_index]
@@ -814,6 +820,7 @@ if __name__ == "__main__":
                                         post_to_verdict_server("store_instrumentation_point/",
                                                                data=serialised_dictionary))
                                 except:
+                                    traceback.print_exc()
                                     print(
                                         "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
                                     exit()
@@ -837,7 +844,7 @@ if __name__ == "__main__":
                         for atom_sub_index in point_to_triples[point][atom_index].keys():
                             print("placing single instrument at %s for atom %s at index %i and sub index %i" % (
                                 point, atom, atom_index, atom_sub_index))
-                            list_of_lists = zip(*point_to_triples[point][atom_index][atom_sub_index])
+                            list_of_lists = list(zip(*point_to_triples[point][atom_index][atom_sub_index]))
 
                             # extract the parameters for this instrumentation point
                             binding_space_indices = list_of_lists[0]
@@ -1006,7 +1013,7 @@ if __name__ == "__main__":
                                 # instrument_code = "print(\"appending path condition %s inside conditional\")" % vertex_information[2]
                                 # send branching condition to verdict server, take the ID from the response and use it in the path recording instruments.
                                 condition_dict = {
-                                    "serialised_condition": pickle.dumps(vertex_information[2])
+                                    "serialised_condition": base64.encodestring(pickle.dumps(vertex_information[2])).decode('ascii')
                                 }
                             else:
                                 print(
@@ -1021,6 +1028,7 @@ if __name__ == "__main__":
                                 branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
                                                                                     data=json.dumps(condition_dict)))
                             except:
+                                traceback.print_exc()
                                 print(
                                     "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
                                 exit()
@@ -1039,13 +1047,14 @@ if __name__ == "__main__":
                             print("Placing branch recording instrument for conditional with no else")
                             # send branching condition to verdict server, take the ID from the response and use it in the path recording instruments.
                             condition_dict = {
-                                "serialised_condition": pickle.dumps(vertex_information[2])
+                                "serialised_condition": base64.encodestring(pickle.dumps(vertex_information[2])).decode('ascii')
                             }
                             # if the condition already exists in the database, the verdict server will return the existing ID
                             try:
                                 branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
                                                                                     data=json.dumps(condition_dict)))
                             except:
+                                traceback.print_exc()
                                 print(
                                     "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
                                 exit()
@@ -1086,6 +1095,7 @@ if __name__ == "__main__":
                                 branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
                                                                                     data=json.dumps(condition_dict)))
                             except:
+                                traceback.print_exc()
                                 print(
                                     "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
                                 exit()
@@ -1112,6 +1122,7 @@ if __name__ == "__main__":
                                 branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
                                                                                     data=json.dumps(condition_dict)))
                             except:
+                                traceback.print_exc()
                                 print(
                                     "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
                                 exit()
@@ -1130,6 +1141,7 @@ if __name__ == "__main__":
                                 branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
                                                                                     data=json.dumps(condition_dict)))
                             except:
+                                traceback.print_exc()
                                 print(
                                     "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
                                 exit()
@@ -1273,9 +1285,15 @@ if __name__ == "__main__":
 
         print("writing instrumented code to %s" % instrumented_file_name)
 
+        import struct
+
         with open(instrumented_file_name, "wb") as h:
-            h.write(py_compile.MAGIC)
-            py_compile.wr_long(h, long(time.time()))
+            #h.write(py_compile.MAGIC)
+            #h.write(importlib.util.MAGIC_NUMBER)
+            #py_compile.wr_long(h, long(time.time()))
+            mtime = int(os.stat("%s.py" % file_name_without_extension).st_mtime)
+            preamble = struct.pack('<4sll', importlib.util.MAGIC_NUMBER, len(instrumented_code.co_code), mtime)
+            h.write(preamble)
             marshal.dump(instrumented_code, h)
 
         # rename the original file so it doesn't overwrite bytecode at runtime with recompilation

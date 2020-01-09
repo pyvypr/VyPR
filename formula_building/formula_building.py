@@ -62,8 +62,11 @@ class Forall(object):
         check that, if is_first is true, the bind variable is independent.
         """
 
-        bind_variable_name = bind_variable.keys()[0]
-        bind_variable_obj = bind_variable.values()[0]
+        # note: this is a quick fix, but needs to be modified
+        # since dictionaries don't guarantee order
+        bind_variable_name = list(bind_variable.keys())[0]
+        #bind_variable_obj = bind_variable.values()[0]
+        bind_variable_obj = bind_variable[bind_variable_name]
 
         self.bind_variables = bind_variables
 
@@ -134,10 +137,10 @@ class Forall(object):
         """
         # use the arguments of the lambda function
         argument_names = inspect.getargspec(self._formula).args
-        bind_variables = map(
+        bind_variables = list(map(
             lambda arg_name: self.bind_variables[arg_name],
             argument_names
-        )
+        ))
         if first_time:
             # enable "_arithmetic_build" flag in bind variables
             # so arithmetic operations are added

@@ -8,8 +8,9 @@ import json
 import os
 import pickle
 import threading
+import traceback
 
-import Queue
+from queue import Queue
 import flask
 import requests
 from VyPR.control_flow_graph.construction import CFGEdge, CFGVertex
@@ -117,7 +118,8 @@ def consumption_thread_function(verification_obj):
     # the web service has to be considered as running forever, so the monitoring loop for now should also run forever
     # this needs to be changed for a clean exit
     INACTIVE_MONITORING = False
-    while True:
+    continue_monitoring = True
+    while continue_monitoring:
 
         # take top element from the queue
         try:
@@ -127,8 +129,9 @@ def consumption_thread_function(verification_obj):
 
         if top_pair[0] == "end-monitoring":
             # return from the monitoring function to end the monitoring thread
-            vypr_output("Returning from monitoring thread.")
-            return
+            print("Returning from monitoring thread.")
+            continue_monitoring = False
+            continue
 
         # if monitoring is inactive, we do nothing with what we consume unless it's a resume message
         if INACTIVE_MONITORING:
@@ -147,8 +150,7 @@ def consumption_thread_function(verification_obj):
                 continue
         # if inactive monitoring is off (so monitoring is running), process what we consumed
 
-        vypr_output("Consuming:")
-        vypr_output(top_pair)
+        vypr_output("Consuming: %s" % str(top_pair))
 
         property_hash = top_pair[0]
 
@@ -390,6 +392,8 @@ def consumption_thread_function(verification_obj):
 
         vypr_output("=" * 100)
 
+    print("monitoring thread over")
+
 
 class PropertyMapGroup(object):
     """
@@ -423,11 +427,16 @@ class PropertyMapGroup(object):
 
         # reconstruct formula structure
         # there's probably a better way to do this
-        exec("".join(open(verification_conf_file, "r").readlines()))
+        #exec("".join(open(verification_conf_file, "r").readlines()))
+
+        from verification_conf import verification_conf
+        
         index_to_hash = pickle.loads(index_to_hash_dump)
         property_index = index_to_hash.index(property_hash)
 
         print(function_name, property_index)
+
+        print("specification imported")
 
         # might just change the syntax in the verification conf file at some point to use : instead of .
         self.formula_structure = verification_conf[module_name][function_name.replace(":", ".")][property_index]
@@ -453,11 +462,11 @@ def read_configuration(file):
 
 class Verification(object):
 
-    def __init__(self, flask_object=None):
+    def __init__(self):
         """
         Sets up the consumption thread for events from instruments.
         """
-        vypr_output("Initialising VyPR monitoring...")
+        vypr_output("VyPR verification object instantiated...")
 
         # read configuration file
         inst_configuration = read_configuration("vypr.config")
@@ -476,13 +485,26 @@ class Verification(object):
             self.initialisation_failure = True
             return
 
-        if flask_object:
-            # add the request time recording function before every request
-            def set_request_time():
-                import datetime
-                flask.g.request_time = datetime.datetime.now()
+    def init_app(self, flask_object=None):
 
-            flask_object.before_request(set_request_time)
+        vypr_output("Initialising VyPR alongside service.")
+
+        # read configuration file
+        inst_configuration = read_configuration("vypr.config")
+        global VERDICT_SERVER_URL, VYPR_OUTPUT_VERBOSE, PROJECT_ROOT
+        VERDICT_SERVER_URL = inst_configuration.get("verdict_server_url") if inst_configuration.get(
+            "verdict_server_url") else "http://localhost:9001/"
+        VYPR_OUTPUT_VERBOSE = inst_configuration.get("verbose") if inst_configuration.get("verbose") else True
+        PROJECT_ROOT = inst_configuration.get("project_root") if inst_configuration.get("project_root") else ""
+
+        if flask_object:
+            def prepare_vypr():
+                import datetime
+                # this function runs inside a request, so flask.g exists
+                # we store just the request time
+                flask.g.request_time = datetime.datetime.now()
+            
+            flask_object.before_request(prepare_vypr)
 
             # add VyPR end points - we may use this for statistics collection on the server
             # add the safe exist end point
@@ -545,7 +567,7 @@ class Verification(object):
         vypr_output("Setting up monitoring thread.")
 
         # setup consumption queue and store it globally across requests
-        self.consumption_queue = Queue.Queue()
+        self.consumption_queue = Queue()
         # setup consumption thread
         self.consumption_thread = threading.Thread(
             target=consumption_thread_function,
@@ -556,13 +578,13 @@ class Verification(object):
         vypr_output("VyPR monitoring initialisation finished.")
 
     def send_event(self, event_description):
+        flask.current_app.logger.info("sending event to monitoring thread")
         if not (self.initialisation_failure):
-            vypr_output("adding %s to consumption queue" % str(event_description))
             self.consumption_queue.put(event_description)
 
     def end_monitoring(self):
         if not (self.initialisation_failure):
-            vypr_output("ending VyPR monitoring")
+            vypr_output("Ending VyPR monitoring thread.")
             self.consumption_queue.put(("end-monitoring",))
 
     def pause_monitoring(self):
