@@ -21,7 +21,7 @@ rindex = sys.path[0].rfind("/VyPR")
 sys.path[0] = sys.path[0][:rindex] + sys.path[0][rindex + len("/VyPR"):]
 
 # get the formula building functions before we evaluate the configuration code
-from VyPR.PyCFTL.formula_building import *
+from VyPR.QueryBuilding import *
 from VyPR.SCFG.construction import *
 
 VERDICT_SERVER_URL = None

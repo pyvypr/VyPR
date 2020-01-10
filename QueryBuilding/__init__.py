@@ -5,3 +5,6 @@ In applying this licence, CERN does not waive the privileges and immunities gran
 
 Author: Joshua Dawes - CERN, University of Manchester - joshua.dawes@cern.ch
 """
+
+# make everything defined inside this package available without having to refer to individual modules
+from .formula_building import *

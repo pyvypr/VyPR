@@ -11,11 +11,9 @@ import traceback
 from queue import Queue
 import requests
 from VyPR.SCFG.construction import CFGEdge, CFGVertex
-from VyPR.PyCFTL.formula_building import *
+from VyPR.QueryBuilding import *
 from VyPR.monitor_synthesis import formula_tree
 from VyPR.verdict_reports import VerdictReport
-
-# sys.path.append("VyPR/")
 
 VERDICT_SERVER_URL = None
 VYPR_OUTPUT_VERBOSE = True
@@ -51,7 +49,6 @@ class MonitoringLog(object):
                 print(message)
 
 
-# thank you to the CMS Conditions Browser team for this
 def to_timestamp(obj):
     if type(obj) is datetime.datetime:
         return obj.isoformat()

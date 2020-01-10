@@ -690,13 +690,6 @@ class CheckerState(object):
         """
         if not (symbol in self._state.keys()):
             atom_index = self._atoms.index(symbol)
-        """if not (lnot(symbol) in self._state.keys()):
-            atom_index = self._atoms.index(lnot(symbol))"""
-
-        """positive_key_index = list(self._state.keys()).index(symbol)
-        negative_key_index = list(self._state.keys()).index(lnot(symbol))
-        positive_key = list(self._state.keys())[positive_key_index]
-        negative_key = list(self._state.keys())[negative_key_index]"""
 
         if formula_is_derived_from_atom(symbol):
             self._state[atom_index] = True

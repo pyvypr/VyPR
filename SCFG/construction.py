@@ -15,7 +15,7 @@ import ast
 
 from graphviz import Digraph
 from VyPR.monitor_synthesis import formula_tree
-from VyPR.PyCFTL.formula_building import *
+from VyPR.QueryBuilding import *
 
 vertices = []
 
