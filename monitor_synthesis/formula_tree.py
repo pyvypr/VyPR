@@ -442,7 +442,7 @@ class TimeBetweenInOpenInterval(Atom):
         return "timeBetween(%s, %s) in %s" % (self._lhs, self._rhs, str(self._interval))
 
     def __eq__(self, other_atom):
-        if type(other_atom) is TimeBetweenInInterval:
+        if type(other_atom) is TimeBetweenInOpenInterval:
             return (self._lhs == other_atom._lhs and
                     self._rhs == other_atom._rhs and
                     self._interval == other_atom._interval)
@@ -456,9 +456,9 @@ class TimeBetweenInOpenInterval(Atom):
             return None
         else:
             # measure the time difference and check for containment in the interval
-            return self._interval[0] < (
-                    cummulative_state[1][0]["time"] - cummulative_state[0][0]["time"]).total_seconds() < \
-                   self._interval[1]
+            duration = (cummulative_state[1][0]["time"] - cummulative_state[0][0]["time"]).total_seconds()
+            result = self._interval[0] < duration < self._interval[1]
+            return result
 
 
 """
@@ -685,8 +685,9 @@ class CheckerState(object):
     def __init__(self, atoms):
         # initial state is None or "unobserved" for every atom
         self._state = {}
-        for atom in atoms:
-            self._state[atom] = None
+        self._atoms = atoms
+        for (n, atom) in enumerate(atoms):
+            self._state[n] = None
 
     def set_state(self, symbol):
         """
@@ -694,20 +695,19 @@ class CheckerState(object):
         and set its negative to false
         """
         if not (symbol in self._state.keys()):
-            self._state[symbol] = None
-        if not (lnot(symbol) in self._state.keys()):
-            self._state[lnot(symbol)] = None
-        positive_key_index = list(self._state.keys()).index(symbol)
+            atom_index = self._atoms.index(symbol)
+        """if not (lnot(symbol) in self._state.keys()):
+            atom_index = self._atoms.index(lnot(symbol))"""
+
+        """positive_key_index = list(self._state.keys()).index(symbol)
         negative_key_index = list(self._state.keys()).index(lnot(symbol))
         positive_key = list(self._state.keys())[positive_key_index]
-        negative_key = list(self._state.keys())[negative_key_index]
+        negative_key = list(self._state.keys())[negative_key_index]"""
 
         if formula_is_derived_from_atom(symbol):
-            self._state[positive_key] = True
-            self._state[negative_key] = False
+            self._state[atom_index] = True
         elif type(symbol) is LogicalNot and formula_is_derived_from_atom(symbol.operand):
-            self._state[positive_key] = False
-            self._state[negative_key] = True
+            self._state[atom_index] = False
 
     def __repr__(self):
         return str(self._state)
@@ -1168,6 +1168,7 @@ class Checker(object):
                     self._formula.verdict = True
                 return True
             else:
+                print("collapsed to false")
                 if level == 0:
                     self._formula.verdict = False
                 return False
