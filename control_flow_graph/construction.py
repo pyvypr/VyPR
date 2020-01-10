@@ -744,7 +744,6 @@ class CFG(object):
                          and type(edge._instruction.value) is ast.Call and function in get_function_name_strings(
                                     edge._instruction.value))):
                     calls.append(edge)
-                    print("new calls list is", calls)
                 else:
                     # this edge is not what we're looking for
                     # so traverse this branch further
