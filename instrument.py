@@ -18,7 +18,7 @@ import datetime
 
 # for now, we remove the final occurrence of VyPR from the first path to look in for modules
 rindex = sys.path[0].rfind("/VyPR")
-sys.path[0] = sys.path[0][:rindex] + sys.path[0][rindex+len("/VyPR"):]
+sys.path[0] = sys.path[0][:rindex] + sys.path[0][rindex + len("/VyPR"):]
 
 # get the formula building functions before we evaluate the configuration code
 from VyPR.PyCFTL.formula_building import *
@@ -33,14 +33,16 @@ PROJECT_ROOT = ""
 VERIFICATION_INSTRUCTION = "verification.send_event"
 LOGS_TO_STDOUT = False
 
+
 class InstrumentationLog(object):
     """
     Class to handle instrumentation logging.
     """
+
     def __init__(self, logs_to_stdout):
         self.logs_to_stdout = logs_to_stdout
-        self.log_file_name = "instrumentation_logs/%s"\
-                             % str(datetime.datetime.now()).\
+        self.log_file_name = "instrumentation_logs/%s" \
+                             % str(datetime.datetime.now()). \
                                  replace(" ", "_").replace(":", "_").replace(".", "_").replace("-", "_")
         self.handle = None
 
@@ -96,9 +98,9 @@ def construct_reachability_map(scfg):
 
 def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_binding=[]):
     """
-    Given a sequence of quantifers over symbolic states/edges in the given scfg,
-    compute the space of bindings that can be given to the formula to which this quantifier sequence is applied.
-    The current_binding given may be partial, but represents the current point in the space of bindings upto which we have traversed.
+    Given a sequence of quantifiers over symbolic states/edges in the given scfg, compute the space of bindings that
+    can be given to the formula to which this quantifier sequence is applied. The current_binding given may be
+    partial, but represents the current point in the space of bindings upto which we have traversed.
     """
 
     if len(current_binding) == 0:
@@ -109,7 +111,8 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
                 # a name was given as selection criteria
                 variable_changed = list(quantifier_sequence._bind_variables)[0]._name_changed
                 qd = list(filter(lambda symbolic_state: symbolic_state._name_changed == variable_changed \
-                                                   or variable_changed in symbolic_state._name_changed, scfg.vertices))
+                                                        or variable_changed in symbolic_state._name_changed,
+                                 scfg.vertices))
             else:
                 qd = []
                 # a list of coordinates were given
@@ -162,7 +165,8 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
         next_index = len(current_binding)
         next_quantifier = list(quantifier_sequence._bind_variables)[next_index]
         # find the position in the quantifier sequence on which the next quantifier depends
-        index_in_quantifier_sequence = list(quantifier_sequence._bind_variables).index(next_quantifier._required_binding)
+        index_in_quantifier_sequence = list(quantifier_sequence._bind_variables).index(
+            next_quantifier._required_binding)
         # get the current value at that position in the binding we have
         current_binding_value = current_binding[index_in_quantifier_sequence]
         # use the type of the qd we need to traverse the scfg from this point
@@ -175,9 +179,9 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
             # only works for vertex inputs this has to cater for edges that are both assignments and function calls (
             # assignments of function call return values)
             qd = list(filter(lambda edge: hasattr(edge, "_operates_on") and \
-                                     (edge._operates_on == next_quantifier._operates_on or \
-                                      next_quantifier._operates_on in edge._operates_on),
-                        reachability_map[current_binding_value]))
+                                          (edge._operates_on == next_quantifier._operates_on or \
+                                           next_quantifier._operates_on in edge._operates_on),
+                             reachability_map[current_binding_value]))
 
             # compute the bindings from this new qd
             binding_space = []
@@ -335,8 +339,9 @@ def instrument_point_state(state, name, point, binding_space_indices,
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
 
-    instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," + \
-                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {{ '{atom_program_variable}' : {observed_value} }}, __thread_id") \
+    instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," +
+                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {{ '{atom_program_variable}' "
+                        ": {observed_value} }}, __thread_id") \
         .format(
         formula_hash=formula_hash,
         function_qualifier=instrument_function_qualifier,
@@ -423,8 +428,9 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
     timer_end_statement = "__timer_e = vypr_dt.now()"
 
     time_difference_statement = "__duration = __timer_e - __timer_s; "
-    instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," + \
-                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {observed_value}, __thread_id, {state_dict}") \
+    instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," +
+                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {observed_value}, "
+                        "__thread_id, {state_dict}") \
         .format(
         formula_hash=formula_hash,
         function_qualifier=instrument_function_qualifier,
@@ -610,7 +616,7 @@ if __name__ == "__main__":
                 serialised_formula_structure = serialised_formula_structure.decode('ascii')
                 formula_hash = formula_hash.hexdigest()
                 serialised_atom_list = list(
-                    map(lambda item : base64.encodestring(pickle.dumps(item)).decode('ascii'), atoms)
+                    map(lambda item: base64.encodestring(pickle.dumps(item)).decode('ascii'), atoms)
                 )
 
                 # update the index -> hash map
@@ -637,18 +643,18 @@ if __name__ == "__main__":
                 # we attach indices to atoms because we need their index in the set of atoms
                 # of the relevant formula
                 initial_property_dict = {
-                  "formula_hash" : formula_hash,
-                  "function": instrument_function_qualifier,
-                  "serialised_formula_structure": serialised_formula_structure,
-                  "serialised_bind_variables": serialised_bind_variables,
-                  "serialised_atom_list": list(enumerate(serialised_atom_list))
+                    "formula_hash": formula_hash,
+                    "function": instrument_function_qualifier,
+                    "serialised_formula_structure": serialised_formula_structure,
+                    "serialised_bind_variables": serialised_bind_variables,
+                    "serialised_atom_list": list(enumerate(serialised_atom_list))
                 }
 
                 # send instrumentation data to the verdict database
                 try:
                     logger.log(
                         "Sending property with hash '%s' for function '%s' in module '%s' to server." %
-                            (formula_hash, function, module))
+                        (formula_hash, function, module))
                     response = str(post_to_verdict_server("store_property/", data=json.dumps(initial_property_dict)))
                     response = json.loads(response)
                     atom_index_to_db_index = response["atom_index_to_db_index"]
@@ -658,7 +664,7 @@ if __name__ == "__main__":
                     logger.log(traceback.format_exc())
                     logger.log(
                         "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed."
-                            % VERDICT_SERVER_URL)
+                        % VERDICT_SERVER_URL)
                     exit()
 
                 logger.log("Processing set of static bindings:")
@@ -684,7 +690,7 @@ if __name__ == "__main__":
                         logger.log(traceback.format_exc())
                         logger.log(
                             "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed."
-                                % VERDICT_SERVER_URL)
+                            % VERDICT_SERVER_URL)
                         exit()
 
                     static_qd_to_point_map[m] = {}
@@ -780,7 +786,8 @@ if __name__ == "__main__":
                         # insert triggers before the things that will be measured
                         instruction._parent_body.insert(index_in_block, instrument_ast)
 
-                # we then invert the map we constructed from triples to instrumentation points so that we can avoid overlap of instruments
+                # we then invert the map we constructed from triples to instrumentation points so that we can avoid
+                # overlap of instruments
 
                 logger.log("Inverting instrumentation structure ready for optimisations.")
 
@@ -798,9 +805,10 @@ if __name__ == "__main__":
                                 atom_index_in_db = atom_index_to_db_index[atom_index]
                                 instrumentation_point_dictionary = {
                                     "binding": binding_db_id,
-                                    "serialised_condition_sequence": list(map(pickle.dumps,
-                                                                         point._previous_edge._condition if type(
-                                                                             point) is CFGVertex else point._condition)),
+                                    "serialised_condition_sequence": list(
+                                        map(pickle.dumps, point._previous_edge._condition
+                                        if type(point) is CFGVertex else point._condition)
+                                    ),
                                     "reaching_path_length": point._path_length if type(
                                         point) is CFGVertex else point._target_state._path_length,
                                     "atom": atom_index_to_db_index[atom_index]
@@ -871,9 +879,8 @@ if __name__ == "__main__":
                                                        measure_attribute="length")
 
                             elif type(atom) in [formula_tree.StateValueEqualToMixed]:
-                                """
-                                We're instrumenting multiple states, so we need to perform instrumentation on two separate points.
-                                """
+                                """We're instrumenting multiple states, so we need to perform instrumentation on two 
+                                separate points. """
 
                                 # for each side of the atom (LHS and RHS), instrument the necessary points
 
@@ -893,9 +900,8 @@ if __name__ == "__main__":
                                                            atom_index, atom_sub_index, instrumentation_point_db_ids)
 
                             elif type(atom) is formula_tree.TransitionDurationLessThanTransitionDurationMixed:
-                                """
-                                We're instrumenting multiple transitions, so we need to perform instrumentation on two separate points.
-                                """
+                                """We're instrumenting multiple transitions, so we need to perform instrumentation on 
+                                two separate points. """
 
                                 # for each side of the atom (LHS and RHS), instrument the necessary points
 
@@ -917,9 +923,8 @@ if __name__ == "__main__":
                                                                 instrumentation_point_db_ids)
 
                             elif type(atom) is formula_tree.TransitionDurationLessThanStateValueMixed:
-                                """
-                                We're instrumenting multiple transitions, so we need to perform instrumentation on two separate points.
-                                """
+                                """We're instrumenting multiple transitions, so we need to perform instrumentation on 
+                                two separate points. """
 
                                 # for each side of the atom (LHS and RHS), instrument the necessary points
 
@@ -940,9 +945,8 @@ if __name__ == "__main__":
                                                            atom_index, atom_sub_index, instrumentation_point_db_ids)
 
                             elif type(atom) is formula_tree.TransitionDurationLessThanStateValueLengthMixed:
-                                """
-                                We're instrumenting multiple transitions, so we need to perform instrumentation on two separate points.
-                                """
+                                """We're instrumenting multiple transitions, so we need to perform instrumentation on 
+                                two separate points. """
 
                                 # for each side of the atom (LHS and RHS), instrument the necessary points
 
@@ -965,9 +969,8 @@ if __name__ == "__main__":
 
                             elif type(atom) in [formula_tree.TimeBetweenInInterval,
                                                 formula_tree.TimeBetweenInOpenInterval]:
-                                """
-                                We're instrumenting multiple transitions, so we need to perform instrumentation on two separate points.
-                                """
+                                """We're instrumenting multiple transitions, so we need to perform instrumentation on 
+                                two separate points. """
 
                                 # for each side of the atom (LHS and RHS), instrument the necessary points
 
@@ -1001,29 +1004,36 @@ if __name__ == "__main__":
                         if vertex_information[0] in ['conditional', 'try-catch']:
                             if vertex_information[0] == 'conditional':
                                 logger.log(
-                                    "Placing branch recording instrument for conditional with first instruction %s in block" %
+                                    "Placing branch recording instrument for conditional with first instruction %s in "
+                                    "block" %
                                     vertex_information[1])
-                                # instrument_code = "logger.log(\"appending path condition %s inside conditional\")" % vertex_information[2]
-                                # send branching condition to verdict server, take the ID from the response and use it in the path recording instruments.
+                                # instrument_code = "logger.log(\"appending path condition %s inside conditional\")"
+                                # % vertex_information[2] send branching condition to verdict server, take the ID
+                                # from the response and use it in the path recording instruments.
                                 condition_dict = {
-                                    "serialised_condition": base64.encodestring(pickle.dumps(vertex_information[2])).decode('ascii')
+                                    "serialised_condition": base64.encodestring(
+                                        pickle.dumps(vertex_information[2])).decode('ascii')
                                 }
                             else:
                                 logger.log(
-                                    "Placing branch recording instrument for try-catch with first instruction %s in block" %
+                                    "Placing branch recording instrument for try-catch with first instruction %s in "
+                                    "block" %
                                     vertex_information[1])
-                                # send branching condition to verdict server, take the ID from the response and use it in the path recording instruments.
+                                # send branching condition to verdict server, take the ID from the response and use
+                                # it in the path recording instruments.
                                 condition_dict = {
                                     "serialised_condition": vertex_information[2]
                                 }
-                            # if the condition already exists in the database, the verdict server will return the existing ID
+                            # if the condition already exists in the database, the verdict server will return the
+                            # existing ID
                             try:
                                 branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
                                                                                     data=json.dumps(condition_dict)))
                             except:
                                 traceback.logger.log_exc()
                                 logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
+                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                                    "completed." % VERDICT_SERVER_URL)
                                 exit()
                             instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (
                                 VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
@@ -1036,18 +1046,22 @@ if __name__ == "__main__":
                             # no else was present in the conditional, so we add a path recording instrument
                             # to the else block
                             logger.log("Placing branch recording instrument for conditional with no else")
-                            # send branching condition to verdict server, take the ID from the response and use it in the path recording instruments.
+                            # send branching condition to verdict server, take the ID from the response and use it in
+                            # the path recording instruments.
                             condition_dict = {
-                                "serialised_condition": base64.encodestring(pickle.dumps(vertex_information[2])).decode('ascii')
+                                "serialised_condition": base64.encodestring(pickle.dumps(vertex_information[2])).decode(
+                                    'ascii')
                             }
-                            # if the condition already exists in the database, the verdict server will return the existing ID
+                            # if the condition already exists in the database, the verdict server will return the
+                            # existing ID
                             try:
                                 branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
                                                                                     data=json.dumps(condition_dict)))
                             except:
                                 traceback.logger.log_exc()
                                 logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
+                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                                    "completed." % VERDICT_SERVER_URL)
                                 exit()
                             instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (
                                 VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
@@ -1059,9 +1073,11 @@ if __name__ == "__main__":
                             if vertex_information[0] == 'post-conditional':
                                 logger.log("Processing post conditional path instrument")
                                 logger.log(vertex_information)
-                                # need this to decide if we've left a conditional, since paths lengths reset after conditionals
+                                # need this to decide if we've left a conditional, since paths lengths reset after
+                                # conditionals
                                 logger.log(
-                                    "Placing branch recording instrument for end of conditional at %s - %i in parent block - line no %i" % \
+                                    "Placing branch recording instrument for end of conditional at %s - %i in parent "
+                                    "block - line no %i" % \
                                     (vertex_information[1],
                                      vertex_information[1]._parent_body.index(vertex_information[1]),
                                      vertex_information[1].lineno))
@@ -1072,9 +1088,11 @@ if __name__ == "__main__":
                             else:
                                 logger.log("Processing post try-catch path instrument")
                                 logger.log(vertex_information)
-                                # need this to decide if we've left a conditional, since paths lengths reset after conditionals
+                                # need this to decide if we've left a conditional, since paths lengths reset after
+                                # conditionals
                                 logger.log(
-                                    "Placing branch recording instrument for end of try-catch at %s - %i in parent block - line no %i" % \
+                                    "Placing branch recording instrument for end of try-catch at %s - %i in parent "
+                                    "block - line no %i" % \
                                     (vertex_information[1],
                                      vertex_information[1]._parent_body.index(vertex_information[1]),
                                      vertex_information[1].lineno))
@@ -1088,7 +1106,8 @@ if __name__ == "__main__":
                             except:
                                 traceback.logger.log_exc()
                                 logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
+                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                                    "completed." % VERDICT_SERVER_URL)
                                 exit()
                             instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (
                                 VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
@@ -1101,19 +1120,22 @@ if __name__ == "__main__":
                             vertex_information[1]._parent_body.insert(index_in_parent, instrument_code_ast)
                             logger.log(vertex_information[1]._parent_body)
                         elif vertex_information[0] == 'loop':
-                            logger.log("Placing branch recording instrument for loop with first instruction %s in body" %
-                                  vertex_information[1])
+                            logger.log(
+                                "Placing branch recording instrument for loop with first instruction %s in body" %
+                                vertex_information[1])
                             condition_dict = {
                                 "serialised_condition": pickle.dumps(vertex_information[2])
                             }
-                            # if the condition already exists in the database, the verdict server will return the existing ID
+                            # if the condition already exists in the database, the verdict server will return the
+                            # existing ID
                             try:
                                 branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
                                                                                     data=json.dumps(condition_dict)))
                             except:
                                 traceback.logger.log_exc()
                                 logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
+                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                                    "completed." % VERDICT_SERVER_URL)
                                 exit()
                             instrument_code_inside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (
                                 VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
@@ -1123,14 +1145,16 @@ if __name__ == "__main__":
                             condition_dict = {
                                 "serialised_condition": pickle.dumps(vertex_information[4])
                             }
-                            # if the condition already exists in the database, the verdict server will return the existing ID
+                            # if the condition already exists in the database, the verdict server will return the
+                            # existing ID
                             try:
                                 branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
                                                                                     data=json.dumps(condition_dict)))
                             except:
                                 traceback.logger.log_exc()
                                 logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be completed." % VERDICT_SERVER_URL)
+                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                                    "completed." % VERDICT_SERVER_URL)
                                 exit()
                             instrument_code_outside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (
                                 VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
@@ -1151,18 +1175,17 @@ if __name__ == "__main__":
 
                     logger.log("=" * 100)
 
-                # finally, insert an instrument at the beginning to tell the monitoring thread that a new call of the function has started
-                # and insert one at the end to signal a return
+                # finally, insert an instrument at the beginning to tell the monitoring thread that a new call of the
+                # function has started and insert one at the end to signal a return
 
                 # NOTE: only problem with this is that the "end" instrument is inserted before the return,
                 # so a function call in the return statement maybe missed if it's part of verification...
                 thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
                 vypr_datetime_import = "from datetime import datetime as vypr_dt"
                 vypr_start_time_instrument = "vypr_start_time = vypr_dt.now();"
-                start_instrument = "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
-                                   % (
-                                       VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
-                                       formula_hash)
+                start_instrument = \
+                    "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
+                    % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
 
                 threading_import_ast = ast.parse(thread_id_capture).body[0]
                 thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
@@ -1184,9 +1207,9 @@ if __name__ == "__main__":
 
                 # insert the end instrument before every return statement
                 for end_vertex in scfg.return_statements:
-                    end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id))" \
-                                     % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
-                                        formula_hash)
+                    end_instrument =\
+                        "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id))"\
+                        % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
                     end_ast = ast.parse(end_instrument).body[0]
 
                     end_ast.lineno = end_vertex._previous_edge._instruction._parent_body[-1].lineno
