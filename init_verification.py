@@ -10,7 +10,7 @@ import traceback
 
 from queue import Queue
 import requests
-from VyPR.control_flow_graph.construction import CFGEdge, CFGVertex
+from VyPR.SCFG.construction import CFGEdge, CFGVertex
 from VyPR.PyCFTL.formula_building import *
 from VyPR.monitor_synthesis import formula_tree
 from VyPR.verdict_reports import VerdictReport

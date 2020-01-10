@@ -2,8 +2,6 @@
 Module for performing instrumentation of the service based on the contents of the verification_config.py file.
 """
 
-from __future__ import print_function
-
 import sys
 import importlib
 import traceback
@@ -23,8 +21,8 @@ rindex = sys.path[0].rfind("/VyPR")
 sys.path[0] = sys.path[0][:rindex] + sys.path[0][rindex+len("/VyPR"):]
 
 # get the formula building functions before we evaluate the configuration code
-from VyPR.formula_building.formula_building import *
-from VyPR.control_flow_graph.construction import *
+from VyPR.PyCFTL.formula_building import *
+from VyPR.SCFG.construction import *
 
 VERDICT_SERVER_URL = None
 VERBOSE = False
@@ -61,12 +59,6 @@ class InstrumentationLog(object):
             self.handle.flush()
             if self.logs_to_stdout:
                 print(message)
-
-
-"""def logger.log(*s):
-	global VERBOSE
-	if VERBOSE:
-		__builtins__.print(*s)"""
 
 
 def scfg_to_tree(root):

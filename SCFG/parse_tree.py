@@ -10,7 +10,7 @@ This module contains the classes necessary to represent a parse tree wrt a gramm
 We use this to build parse trees of paths wrt grammars derived from SCFGs.
 """
 
-from VyPR.control_flow_graph.construction import CFGVertex, CFGEdge
+from VyPR.SCFG.construction import CFGVertex, CFGEdge
 
 
 def scfg_element_to_dot(scfg_obj):
