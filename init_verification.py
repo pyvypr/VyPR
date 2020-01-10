@@ -102,9 +102,8 @@ def send_verdict_report(function_name, time_of_call, end_time_of_call, program_p
 
     # send request
     try:
-        print("sending verdicts")
-        #response = requests.post(os.path.join(VERDICT_SERVER_URL, "register_verdicts/"),
-        #                         data=json.dumps(request_body_dict, default=to_timestamp))
+        requests.post(os.path.join(VERDICT_SERVER_URL, "register_verdicts/"),
+                                 data=json.dumps(request_body_dict, default=to_timestamp))
     except Exception as e:
         vypr_output(
             "Something went wrong when sending verdict information to the verdict server.  The verdict information we tried to send is now lost.")
