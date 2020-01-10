@@ -1,7 +1,3 @@
-from __future__ import print_function
-
-"""def #print(*s):
-	pass"""
 """
 (C) Copyright 2018 CERN and University of Manchester.
 This software is distributed under the terms of the GNU General Public Licence version 3 (GPL Version 3), copied verbatim in the file "COPYING".
@@ -17,10 +13,9 @@ This module contains logic for construction of a specialised control flow graph.
 
 import ast
 
-# from graphviz import Digraph
-# sys.path.append(".")
+from graphviz import Digraph
 from VyPR.monitor_synthesis import formula_tree
-from VyPR.formula_building.formula_building import *
+from VyPR.PyCFTL.formula_building import *
 
 vertices = []
 
