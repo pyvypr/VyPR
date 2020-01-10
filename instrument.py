@@ -39,7 +39,6 @@ DRAW_GRAPHS = False
 VERIFICATION_HOME_MODULE = None
 BYTECODE_EXTENSION = ".pyc"
 PROJECT_ROOT = ""
-USE_FLASK = True
 VERIFICATION_INSTRUCTION = "verification.send_event"
 
 """def print(*s):
@@ -323,7 +322,7 @@ def instrument_point_state(state, name, point, binding_space_indices,
         state_recording_instrument = "record_state_%s = type(%s).__name__; " % (state_variable_alias, name)
     elif measure_attribute == "time_attained":
         state_variable_alias = "time_attained_%i" % atom_sub_index
-        state_recording_instrument = "record_state_%s = datetime.datetime.now(); " % state_variable_alias
+        state_recording_instrument = "record_state_%s = vypr_dt.now(); " % state_variable_alias
         # the only purpose here is to match what is expected in the monitoring algorithm
         name = "time"
     else:
@@ -415,8 +414,8 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
     else:
         state_dict = "{}"
 
-    timer_start_statement = "__timer_s = datetime.datetime.now()"
-    timer_end_statement = "__timer_e = datetime.datetime.now()"
+    timer_start_statement = "__timer_s = vypr_dt.now()"
+    timer_end_statement = "__timer_e = vypr_dt.now()"
 
     time_difference_statement = "__duration = __timer_e - __timer_s; "
     instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," + \
@@ -482,13 +481,9 @@ if __name__ == "__main__":
         if inst_configuration.get("bytecode_extension") else ".pyc"
     PROJECT_ROOT = inst_configuration.get("project_root") \
         if inst_configuration.get("project_root") else ""
-    USE_FLASK = inst_configuration.get("use_flask") \
-        if inst_configuration.get("use_flask") else "no"
-    VERIFICATION_INSTRUCTION = inst_configuration.get("verification_instruction") \
-        if inst_configuration.get("verification_instruction") else "verification.send_event"
-
-    # convert the USE_FLASK flag to boolean
-    USE_FLASK = {"yes": True, "no": False}[USE_FLASK]
+    #VERIFICATION_INSTRUCTION = inst_configuration.get("verification_instruction") \
+    #    if inst_configuration.get("verification_instruction") else "verification.send_event"
+    VERIFICATION_INSTRUCTION = "vypr.send_event"
 
     # reset code to non-instrumented
     for directory in os.walk("."):
@@ -527,19 +522,6 @@ if __name__ == "__main__":
         # extract asts from the code in the file
         code = "".join(open(file_name, "r").readlines())
         asts = ast.parse(code)
-
-        # add necessary imports for instruments to work
-        if USE_FLASK:
-            # if we're using flask, we assume a certain architecture
-            #import_code = "from %s import verification; import flask" % VERIFICATION_HOME_MODULE
-            import_code = "from .. import verification; import flask"
-            import_asts = ast.parse(import_code)
-
-            verification_import = import_asts.body[0]
-            flask_import = import_asts.body[1]
-
-            asts.body.insert(0, flask_import)
-            asts.body.insert(0, verification_import)
 
         for function in verified_functions:
 
@@ -1173,13 +1155,17 @@ if __name__ == "__main__":
                 # NOTE: only problem with this is that the "end" instrument is inserted before the return,
                 # so a function call in the return statement maybe missed if it's part of verification...
                 thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
-                start_instrument = "%s((\"%s\", \"function\", \"%s\", \"start\", flask.g.request_time, \"%s\", __thread_id))" \
+                vypr_datetime_import = "from datetime import datetime as vypr_dt"
+                vypr_start_time_instrument = "vypr_start_time = vypr_dt.now();"
+                start_instrument = "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
                                    % (
                                        VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
                                        formula_hash)
 
                 threading_import_ast = ast.parse(thread_id_capture).body[0]
                 thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
+                vypr_datetime_import_ast = ast.parse(vypr_datetime_import).body[0]
+                vypr_start_time_ast = ast.parse(vypr_start_time_instrument).body[0]
                 start_ast = ast.parse(start_instrument).body[0]
 
                 print("inserting scope instruments with line number ", function_def.body[0].lineno)
@@ -1188,6 +1174,8 @@ if __name__ == "__main__":
 
                 threading_import_ast.lineno = function_def.body[0].lineno
                 thread_id_capture_ast.lineno = function_def.body[0].lineno
+                vypr_datetime_import_ast.lineno = function_def.body[0].lineno
+                vypr_start_time_ast.lineno = function_def.body[0].lineno
                 start_ast.lineno = function_def.body[0].lineno
 
                 """threading_import_ast.lineno = function_def.body[0].lineno
@@ -1200,12 +1188,14 @@ if __name__ == "__main__":
                 function_def.body.insert(0, start_ast)
                 function_def.body.insert(0, thread_id_capture_ast)
                 function_def.body.insert(0, threading_import_ast)
+                function_def.body.insert(0, vypr_start_time_ast)
+                function_def.body.insert(0, vypr_datetime_import_ast)
 
                 print(function_def.body)
 
                 # insert the end instrument before every return statement
                 for end_vertex in scfg.return_statements:
-                    end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id))" \
+                    end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id))" \
                                      % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
                                         formula_hash)
                     end_ast = ast.parse(end_instrument).body[0]
@@ -1225,7 +1215,7 @@ if __name__ == "__main__":
 
                 # if the last instruction in the ast is not a return statement, add an end instrument at the end
                 if not (type(function_def.body[-1]) is ast.Return):
-                    end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\"))" \
+                    end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\"))" \
                                      % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
                                         formula_hash)
                     end_ast = ast.parse(end_instrument).body[0]
