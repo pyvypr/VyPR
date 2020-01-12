@@ -352,8 +352,9 @@ def instrument_point_state(state, name, point, binding_space_indices,
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
 
-    instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," +
-                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {{ '{atom_program_variable}' "
+    instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, "
+                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, vypr_dt.now(), "
+                        "{{ '{atom_program_variable}' "
                         ": {observed_value} }}, __thread_id") \
         .format(
         formula_hash=formula_hash,
@@ -442,7 +443,7 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
 
     time_difference_statement = "__duration = __timer_e - __timer_s; "
     instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," +
-                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {observed_value}, "
+                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {obs_time}, {observed_value}, "
                         "__thread_id, {state_dict}") \
         .format(
         formula_hash=formula_hash,
@@ -451,6 +452,7 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
         atom_index=atom_index,
         atom_sub_index=atom_sub_index,
         instrumentation_point_db_id=instrumentation_point_db_ids,
+        obs_time="__timer_s",
         observed_value="__duration",
         state_dict=state_dict
     )
