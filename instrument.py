@@ -1243,6 +1243,14 @@ if __name__ == "__main__":
                                    (file_name_without_extension.replace(".", ""), module.replace(".", "-"),
                                     function.replace(".", "-")))
 
+                # check for existence of directories for intermediate data and create them if not found
+                if not(os.path.isdir("instrumentation_maps")):
+                    os.mkdir("instrumentation_maps")
+                if not(os.path.isdir("binding_spaces")):
+                    os.mkdir("binding_spaces")
+                if not(os.path.isdir("index_hash")):
+                    os.mkdir("index_hash")
+
                 # write the instrumentation map to the intermediate dump file
 
                 # pickle the static qd map
