@@ -41,6 +41,9 @@ class InstrumentationLog(object):
 
     def __init__(self, logs_to_stdout):
         self.logs_to_stdout = logs_to_stdout
+        # check for log directory - create it if it doesn't exist
+        if not(os.path.isdir("instrumentation_logs")):
+            os.mkdir("instrumentation_logs")
         self.log_file_name = "instrumentation_logs/%s" \
                              % str(datetime.datetime.now()). \
                                  replace(" ", "_").replace(":", "_").replace(".", "_").replace("-", "_")

@@ -27,6 +27,9 @@ class MonitoringLog(object):
 
     def __init__(self, logs_to_stdout):
         self.logs_to_stdout = logs_to_stdout
+        # check for log directory - create it if it doesn't exist
+        if not (os.path.isdir("vypr_monitoring_logs")):
+            os.mkdir("vypr_monitoring_logs")
         self.log_file_name = "vypr_monitoring_logs/%s" \
                              % str(datetime.datetime.now()). \
                                  replace(" ", "_").replace(":", "_").replace(".", "_").replace("-", "_")
