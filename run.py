@@ -11,15 +11,16 @@ import sys
 import os
 import subprocess
 import json
+import time
 
 
 def run_in_shell(*popenargs, **kwargs):
     """Run string-based commands in the shell and returns the result."""
-    out = open(os.devnull, 'w')
     new_kwargs = kwargs
     if new_kwargs.get("stdout"):
         del new_kwargs["stdout"]
-    process = subprocess.Popen(*popenargs, stdout=out, stderr=out, shell=True, **new_kwargs)
+    process = subprocess.Popen(*popenargs,
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True, **new_kwargs)
     stdout = process.communicate()[0]
     return_code = process.returncode
     cmd = kwargs.get('args')
@@ -30,12 +31,20 @@ def run_in_shell(*popenargs, **kwargs):
     return stdout
 
 
+def run_in_shell_nonblocking(command):
+    """Run string-based commands in the shell and returns the result."""
+    subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
+
+
 def start_verdict_server():
     """Start a verdict server in a separate process."""
     print("Starting local verdict server at 'http://localhost:9002/'.")
-    sys.path.append("VyPRServer")
-    out = open(os.devnull, 'w')
-    run_in_shell("cd VyPRServer && python run_service.py &")
+    run_in_shell_nonblocking(
+        'tmux new -d -s server; tmux send-keys -t server.0 "python VyPRServer/run_service.py" ENTER;'
+    )
+    # give the server time to start up
+    time.sleep(2)
+
 
 
 if __name__ == "__main__":
@@ -96,8 +105,10 @@ if __name__ == "__main__":
     if not(os.path.isdir("vypr_monitoring_logs/")):
         os.mkdir("vypr_monitoring_logs/")
 
+    sys.path.append("VyPR")
+
     # run instrumentation and monitoring
     print("Instrumenting and monitoring...")
-    result = run_in_shell("python VyPR/instrument.py && python -m %s;" % args.module)
+    run_in_shell("python VyPR/instrument.py; python -m %s;" % args.module)
 
     print("Program run under VyPR finished.")
