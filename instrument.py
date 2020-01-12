@@ -278,6 +278,16 @@ def post_to_verdict_server(url, data):
     return response
 
 
+def is_verdict_server_reachable():
+    """Try to query the index page of the verdict server."""
+    global VERDICT_SERVER_URL
+    try:
+        requests.get(VERDICT_SERVER_URL)
+        return True
+    except:
+        return False
+
+
 def read_configuration(file):
     """
     Read in 'file', parse into an object and return.
@@ -501,6 +511,11 @@ if __name__ == "__main__":
         if inst_configuration.get("project_root") else ""
     VERIFICATION_INSTRUCTION = "vypr.send_event"
 
+    # first, check that the verdict server is reachable
+    if not(is_verdict_server_reachable()):
+        print("Verdict server is not reachable.  Ending instrumentation - nothing has been done.")
+        exit()
+
     # initialise instrumentation logger
     logger = InstrumentationLog(LOGS_TO_STDOUT)
     # set up the file handle
@@ -520,7 +535,13 @@ if __name__ == "__main__":
 
     logger.log("Importing PyCFTL queries...")
     # load in verification config file
-    from VyPR_queries import verification_conf
+    # to do this, we read in the existing one, write a temporary one with imports added and import that one
+    # this is to allow users to write specifications without caring about importing anything from QueryBuilding
+    specification_code = open("VyPR_queries.py", "r").read()
+    with_imports = "from VyPR.QueryBuilding import *\n%s" % specification_code
+    with open("VyPR_queries_with_imports.py", "w") as h:
+        h.write(with_imports)
+    from VyPR_queries_with_imports import verification_conf
 
     verified_modules = verification_conf.keys()
 
