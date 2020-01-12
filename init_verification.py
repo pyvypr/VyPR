@@ -61,16 +61,14 @@ def to_timestamp(obj):
         return obj
 
 
-# set up logging
-vypr_logger = MonitoringLog(logs_to_stdout=False)
-vypr_logger.start_logging()
+# set up logging variable
+vypr_logger = None
 
 
 def vypr_output(string):
     global vypr_logger
     if VYPR_OUTPUT_VERBOSE:
         vypr_logger.log(string)
-
 
 
 def send_verdict_report(function_name, time_of_call, end_time_of_call, program_path, verdict_report,
@@ -83,6 +81,8 @@ def send_verdict_report(function_name, time_of_call, end_time_of_call, program_p
     vypr_output("Sending verdicts to server...")
 
     # first, send function call data - this will also insert program path data
+    vypr_output("Function start time was %s" % time_of_call)
+    vypr_output("Function end time was %s" % end_time_of_call)
 
     call_data = {
         "transaction_time": transaction_time.isoformat(),
@@ -209,8 +209,8 @@ def consumption_thread_function(verification_obj):
 
                 vypr_output("*" * 50)
 
-                vypr_output("Function '%s' started at time %s has ended."
-                            % (function_name, str(maps.latest_time_of_call)))
+                vypr_output("Function '%s' started at time %s has ended at %s."
+                            % (function_name, str(maps.latest_time_of_call), str(top_pair[-1])))
 
                 # before resetting the qd -> monitor map, go through it to find monitors
                 # that reached a verdict, and register those in the verdict report
@@ -259,7 +259,7 @@ def consumption_thread_function(verification_obj):
                 send_verdict_report(
                     function_name,
                     maps.latest_time_of_call,
-                    datetime.datetime.now(),
+                    top_pair[-1],
                     maps.program_path,
                     verdict_report,
                     binding_to_line_numbers,
@@ -280,7 +280,9 @@ def consumption_thread_function(verification_obj):
                 vypr_output("Function '%s' has started." % function_name)
 
                 # remember when the function call started
-                maps.latest_time_of_call = datetime.datetime.now()
+                maps.latest_time_of_call = top_pair[3]
+
+                vypr_output("Set start time to %s" % maps.latest_time_of_call)
 
                 vypr_output("*" * 50)
 
@@ -500,6 +502,11 @@ class Verification(object):
         """
         Sets up the consumption thread for events from instruments.
         """
+
+        global vypr_logger
+        vypr_logger = MonitoringLog(logs_to_stdout=False)
+        vypr_logger.start_logging()
+
         vypr_output("VyPR verification object instantiated...")
 
         # read configuration file

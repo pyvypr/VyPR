@@ -353,7 +353,7 @@ def instrument_point_state(state, name, point, binding_space_indices,
         state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
 
     instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, "
-                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, vypr_dt.now(), "
+                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {observed_value}, "
                         "{{ '{atom_program_variable}' "
                         ": {observed_value} }}, __thread_id") \
         .format(
@@ -664,7 +664,6 @@ def place_function_begin_instruments(function_def, formula_hash, instrument_func
     # NOTE: only problem with this is that the "end" instrument is inserted before the return,
     # so a function call in the return statement maybe missed if it's part of verification...
     thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
-    vypr_datetime_import = "from datetime import datetime as vypr_dt"
     vypr_start_time_instrument = "vypr_start_time = vypr_dt.now();"
     start_instrument = \
         "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
@@ -672,13 +671,11 @@ def place_function_begin_instruments(function_def, formula_hash, instrument_func
 
     threading_import_ast = ast.parse(thread_id_capture).body[0]
     thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
-    vypr_datetime_import_ast = ast.parse(vypr_datetime_import).body[0]
     vypr_start_time_ast = ast.parse(vypr_start_time_instrument).body[0]
     start_ast = ast.parse(start_instrument).body[0]
 
     threading_import_ast.lineno = function_def.body[0].lineno
     thread_id_capture_ast.lineno = function_def.body[0].lineno
-    vypr_datetime_import_ast.lineno = function_def.body[0].lineno
     vypr_start_time_ast.lineno = function_def.body[0].lineno
     start_ast.lineno = function_def.body[0].lineno
 
@@ -686,14 +683,14 @@ def place_function_begin_instruments(function_def, formula_hash, instrument_func
     function_def.body.insert(0, thread_id_capture_ast)
     function_def.body.insert(0, threading_import_ast)
     function_def.body.insert(0, vypr_start_time_ast)
-    function_def.body.insert(0, vypr_datetime_import_ast)
 
 
 def place_function_end_instruments(function_def, scfg, formula_hash, instrument_function_qualifier):
     # insert the end instrument before every return statement
     for end_vertex in scfg.return_statements:
         end_instrument = \
-            "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id))" \
+            "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id, " \
+            "vypr_dt.now()))" \
             % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
         end_ast = ast.parse(end_instrument).body[0]
 
@@ -709,7 +706,8 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
 
     # if the last instruction in the ast is not a return statement, add an end instrument at the end
     if not (type(function_def.body[-1]) is ast.Return):
-        end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\"))" \
+        end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id, " \
+                         "vypr_dt.now()))" \
                          % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
                             formula_hash)
         end_ast = ast.parse(end_instrument).body[0]
@@ -749,6 +747,7 @@ if __name__ == "__main__":
     VYPR_MODULE = inst_configuration.get("vypr_module") \
         if inst_configuration.get("vypr_module") else ""
     VERIFICATION_INSTRUCTION = "vypr.send_event"
+    #VERIFICATION_INSTRUCTION = "print"
 
     # first, check that the verdict server is reachable
     if not(is_verdict_server_reachable()):
@@ -808,6 +807,13 @@ if __name__ == "__main__":
         import_ast.lineno = asts.body[0].lineno
         import_ast.col_offset = asts.body[0].col_offset
         asts.body.insert(0, import_ast)
+
+        # add vypr datetime import
+        vypr_datetime_import = "from datetime import datetime as vypr_dt"
+        datetime_import_ast = ast.parse(vypr_datetime_import).body[0]
+        datetime_import_ast.lineno = asts.body[0].lineno
+        datetime_import_ast.col_offset = asts.body[0].col_offset
+        asts.body.insert(0, datetime_import_ast)
 
         for function in verified_functions:
 
