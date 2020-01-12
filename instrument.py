@@ -29,7 +29,7 @@ VERBOSE = False
 EXPLANATION = False
 DRAW_GRAPHS = False
 BYTECODE_EXTENSION = ".pyc"
-PROJECT_ROOT = ""
+vypr_module = "."
 VERIFICATION_INSTRUCTION = "verification.send_event"
 LOGS_TO_STDOUT = False
 
@@ -744,8 +744,8 @@ if __name__ == "__main__":
     EXPLANATION = inst_configuration.get("explanation") == "on"
     BYTECODE_EXTENSION = inst_configuration.get("bytecode_extension") \
         if inst_configuration.get("bytecode_extension") else ".pyc"
-    PROJECT_ROOT = inst_configuration.get("project_root") \
-        if inst_configuration.get("project_root") else ""
+    VYPR_MODULE = inst_configuration.get("vypr_module") \
+        if inst_configuration.get("vypr_module") else ""
     VERIFICATION_INSTRUCTION = "vypr.send_event"
 
     # first, check that the verdict server is reachable
@@ -801,7 +801,7 @@ if __name__ == "__main__":
         asts = ast.parse(code)
 
         # add import for init_vypr module
-        import_code = "from init_vypr import vypr"
+        import_code = "from %s import vypr" % VYPR_MODULE
         import_ast = ast.parse(import_code).body[0]
         import_ast.lineno = asts.body[0].lineno
         import_ast.col_offset = asts.body[0].col_offset
