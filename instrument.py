@@ -800,6 +800,13 @@ if __name__ == "__main__":
         code = "".join(open(file_name, "r").readlines())
         asts = ast.parse(code)
 
+        # add import for init_vypr module
+        import_code = "from init_vypr import vypr"
+        import_ast = ast.parse(import_code).body[0]
+        import_ast.lineno = asts.body[0].lineno
+        import_ast.col_offset = asts.body[0].col_offset
+        asts.body.insert(0, import_ast)
+
         for function in verified_functions:
 
             logger.log("Processing function '%s'." % function)
