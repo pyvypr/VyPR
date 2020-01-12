@@ -480,6 +480,243 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
     point._instruction._parent_body.insert(index_in_block, start_ast)
 
 
+def place_path_recording_instruments(scfg):
+    # insert path recording instruments - these don't depend on the formula being checked so
+    # this is done independent of binding space computation
+    for vertex_information in scfg.branch_initial_statements:
+        logger.log("-" * 100)
+        if vertex_information[0] in ['conditional', 'try-catch']:
+            if vertex_information[0] == 'conditional':
+                logger.log(
+                    "Placing branch recording instrument for conditional with first instruction %s in "
+                    "block" %
+                    vertex_information[1])
+                # instrument_code = "logger.log(\"appending path condition %s inside conditional\")"
+                # % vertex_information[2] send branching condition to verdict server, take the ID
+                # from the response and use it in the path recording instruments.
+                condition_dict = {
+                    "serialised_condition": vertex_information[2]
+                }
+            else:
+                logger.log(
+                    "Placing branch recording instrument for try-catch with first instruction %s in "
+                    "block" %
+                    vertex_information[1])
+                # send branching condition to verdict server, take the ID from the response and use
+                # it in the path recording instruments.
+                condition_dict = {
+                    "serialised_condition": vertex_information[2]
+                }
+            # if the condition already exists in the database, the verdict server will return the
+            # existing ID
+            try:
+                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
+                                                                    data=json.dumps(condition_dict)))
+            except:
+                traceback.print_exc()
+                logger.log(
+                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                    "completed." % VERDICT_SERVER_URL)
+                exit()
+            instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (
+                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
+                branching_condition_id)
+            instrument_ast = ast.parse(instrument_code).body[0]
+            index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1])
+            vertex_information[1]._parent_body.insert(index_in_parent, instrument_ast)
+            logger.log("Branch recording instrument placed")
+        elif vertex_information[0] == "conditional-no-else":
+            # no else was present in the conditional, so we add a path recording instrument
+            # to the else block
+            logger.log("Placing branch recording instrument for conditional with no else")
+            # send branching condition to verdict server, take the ID from the response and use it in
+            # the path recording instruments.
+            condition_dict = {
+                "serialised_condition": vertex_information[2]
+            }
+            # if the condition already exists in the database, the verdict server will return the
+            # existing ID
+            try:
+                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
+                                                                    data=json.dumps(condition_dict)))
+            except:
+                traceback.print_exc()
+                logger.log(
+                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                    "completed." % VERDICT_SERVER_URL)
+                exit()
+            instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (
+                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
+                branching_condition_id)
+            instrument_ast = ast.parse(instrument_code).body[0]
+            vertex_information[1].orelse.insert(0, instrument_ast)
+            logger.log("Branch recording instrument placed")
+        elif vertex_information[0] in ['post-conditional', 'post-try-catch']:
+            if vertex_information[0] == 'post-conditional':
+                logger.log("Processing post conditional path instrument")
+                logger.log(vertex_information)
+                # need this to decide if we've left a conditional, since paths lengths reset after
+                # conditionals
+                logger.log(
+                    "Placing branch recording instrument for end of conditional at %s - %i in parent "
+                    "block - line no %i" % \
+                    (vertex_information[1],
+                     vertex_information[1]._parent_body.index(vertex_information[1]),
+                     vertex_information[1].lineno))
+
+                condition_dict = {
+                    "serialised_condition": "conditional exited"
+                }
+            else:
+                logger.log("Processing post try-catch path instrument")
+                logger.log(vertex_information)
+                # need this to decide if we've left a conditional, since paths lengths reset after
+                # conditionals
+                logger.log(
+                    "Placing branch recording instrument for end of try-catch at %s - %i in parent "
+                    "block - line no %i" % \
+                    (vertex_information[1],
+                     vertex_information[1]._parent_body.index(vertex_information[1]),
+                     vertex_information[1].lineno))
+
+                condition_dict = {
+                    "serialised_condition": "try-catch exited"
+                }
+            try:
+                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
+                                                                    data=json.dumps(condition_dict)))
+            except:
+                traceback.print_exc()
+                logger.log(
+                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                    "completed." % VERDICT_SERVER_URL)
+                exit()
+            instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (
+                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
+                branching_condition_id)
+            instrument_code_ast = ast.parse(instrument_code).body[0]
+
+            index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1]) + 1
+            logger.log(vertex_information[1]._parent_body)
+            logger.log(index_in_parent)
+            vertex_information[1]._parent_body.insert(index_in_parent, instrument_code_ast)
+            logger.log(vertex_information[1]._parent_body)
+        elif vertex_information[0] == 'loop':
+            logger.log(
+                "Placing branch recording instrument for loop with first instruction %s in body" %
+                vertex_information[1])
+            condition_dict = {
+                "serialised_condition": vertex_information[2]
+            }
+            # if the condition already exists in the database, the verdict server will return the
+            # existing ID
+            try:
+                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
+                                                                    data=json.dumps(condition_dict)))
+            except:
+                traceback.print_exc()
+                logger.log(
+                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                    "completed." % VERDICT_SERVER_URL)
+                exit()
+            instrument_code_inside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (
+                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
+                branching_condition_id)
+            instrument_inside_loop_ast = ast.parse(instrument_code_inside_loop).body[0]
+
+            condition_dict = {
+                "serialised_condition": vertex_information[4]
+            }
+            # if the condition already exists in the database, the verdict server will return the
+            # existing ID
+            try:
+                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
+                                                                    data=json.dumps(condition_dict)))
+            except:
+                traceback.print_exc()
+                logger.log(
+                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
+                    "completed." % VERDICT_SERVER_URL)
+                exit()
+            instrument_code_outside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (
+                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
+                branching_condition_id)
+            instrument_outside_loop_ast = ast.parse(instrument_code_outside_loop).body[0]
+
+            # insert at beginning of loop body
+            inside_index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1])
+            # insert just after loop body
+            outside_index_in_parent = vertex_information[3]._parent_body.index(
+                vertex_information[3]) + 1
+
+            vertex_information[1]._parent_body.insert(inside_index_in_parent,
+                                                      instrument_inside_loop_ast)
+            vertex_information[3]._parent_body.insert(outside_index_in_parent,
+                                                      instrument_outside_loop_ast)
+            logger.log("Branch recording instrument for conditional placed")
+
+    logger.log("=" * 100)
+
+
+def place_function_begin_instruments(function_def, formula_hash, instrument_function_qualifier):
+    # NOTE: only problem with this is that the "end" instrument is inserted before the return,
+    # so a function call in the return statement maybe missed if it's part of verification...
+    thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
+    vypr_datetime_import = "from datetime import datetime as vypr_dt"
+    vypr_start_time_instrument = "vypr_start_time = vypr_dt.now();"
+    start_instrument = \
+        "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
+        % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
+
+    threading_import_ast = ast.parse(thread_id_capture).body[0]
+    thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
+    vypr_datetime_import_ast = ast.parse(vypr_datetime_import).body[0]
+    vypr_start_time_ast = ast.parse(vypr_start_time_instrument).body[0]
+    start_ast = ast.parse(start_instrument).body[0]
+
+    threading_import_ast.lineno = function_def.body[0].lineno
+    thread_id_capture_ast.lineno = function_def.body[0].lineno
+    vypr_datetime_import_ast.lineno = function_def.body[0].lineno
+    vypr_start_time_ast.lineno = function_def.body[0].lineno
+    start_ast.lineno = function_def.body[0].lineno
+
+    function_def.body.insert(0, start_ast)
+    function_def.body.insert(0, thread_id_capture_ast)
+    function_def.body.insert(0, threading_import_ast)
+    function_def.body.insert(0, vypr_start_time_ast)
+    function_def.body.insert(0, vypr_datetime_import_ast)
+
+
+def place_function_end_instruments(function_def, scfg, formula_hash, instrument_function_qualifier):
+    # insert the end instrument before every return statement
+    for end_vertex in scfg.return_statements:
+        end_instrument = \
+            "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id))" \
+            % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
+        end_ast = ast.parse(end_instrument).body[0]
+
+        end_ast.lineno = end_vertex._previous_edge._instruction._parent_body[-1].lineno
+
+        logger.log("Placing end instrument at line %i." % end_ast.lineno)
+
+        insertion_position = len(end_vertex._previous_edge._instruction._parent_body) - 1
+
+        end_vertex._previous_edge._instruction._parent_body.insert(insertion_position, end_ast)
+
+        logger.log(end_vertex._previous_edge._instruction._parent_body)
+
+    # if the last instruction in the ast is not a return statement, add an end instrument at the end
+    if not (type(function_def.body[-1]) is ast.Return):
+        end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\"))" \
+                         % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
+                            formula_hash)
+        end_ast = ast.parse(end_instrument).body[0]
+
+        logger.log("Placing end instrument at the end of the function body.")
+
+        function_def.body.insert(len(function_def.body), end_ast)
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Instrumentation for VyPR.')
@@ -538,6 +775,9 @@ if __name__ == "__main__":
     # to do this, we read in the existing one, write a temporary one with imports added and import that one
     # this is to allow users to write specifications without caring about importing anything from QueryBuilding
     specification_code = open("VyPR_queries.py", "r").read()
+    # replace empty lists with a fake property
+    fake_property = "[Forall(q = changes('fake_vypr_var')).Check(lambda q : q('fake_vypr_var').equals(True))]"
+    specification_code = specification_code.replace("[]", fake_property)
     with_imports = "from VyPR.QueryBuilding import *\n%s" % specification_code
     with open("VyPR_queries_with_imports.py", "w") as h:
         h.write(with_imports)
@@ -1015,247 +1255,11 @@ if __name__ == "__main__":
                                                            atom_index, atom_sub_index, instrumentation_point_db_ids,
                                                            measure_attribute="time_attained")
 
-                if EXPLANATION:
-                    logger.log("=" * 100)
-                    logger.log("Placing path recording instruments.")
-
-                    # if explanation was turned on in the configuration file, insert path instruments.
-
-                    # insert path recording instruments - these don't depend on the formula being checked so
-                    # this is done independent of binding space computation
-                    for vertex_information in scfg.branch_initial_statements:
-                        logger.log("-" * 100)
-                        if vertex_information[0] in ['conditional', 'try-catch']:
-                            if vertex_information[0] == 'conditional':
-                                logger.log(
-                                    "Placing branch recording instrument for conditional with first instruction %s in "
-                                    "block" %
-                                    vertex_information[1])
-                                # instrument_code = "logger.log(\"appending path condition %s inside conditional\")"
-                                # % vertex_information[2] send branching condition to verdict server, take the ID
-                                # from the response and use it in the path recording instruments.
-                                condition_dict = {
-                                    "serialised_condition": base64.encodestring(
-                                        pickle.dumps(vertex_information[2])).decode('ascii')
-                                }
-                            else:
-                                logger.log(
-                                    "Placing branch recording instrument for try-catch with first instruction %s in "
-                                    "block" %
-                                    vertex_information[1])
-                                # send branching condition to verdict server, take the ID from the response and use
-                                # it in the path recording instruments.
-                                condition_dict = {
-                                    "serialised_condition": vertex_information[2]
-                                }
-                            # if the condition already exists in the database, the verdict server will return the
-                            # existing ID
-                            try:
-                                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
-                                                                                    data=json.dumps(condition_dict)))
-                            except:
-                                traceback.logger.log_exc()
-                                logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
-                                    "completed." % VERDICT_SERVER_URL)
-                                exit()
-                            instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (
-                                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
-                                branching_condition_id)
-                            instrument_ast = ast.parse(instrument_code).body[0]
-                            index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1])
-                            vertex_information[1]._parent_body.insert(index_in_parent, instrument_ast)
-                            logger.log("Branch recording instrument placed")
-                        elif vertex_information[0] == "conditional-no-else":
-                            # no else was present in the conditional, so we add a path recording instrument
-                            # to the else block
-                            logger.log("Placing branch recording instrument for conditional with no else")
-                            # send branching condition to verdict server, take the ID from the response and use it in
-                            # the path recording instruments.
-                            condition_dict = {
-                                "serialised_condition": base64.encodestring(pickle.dumps(vertex_information[2])).decode(
-                                    'ascii')
-                            }
-                            # if the condition already exists in the database, the verdict server will return the
-                            # existing ID
-                            try:
-                                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
-                                                                                    data=json.dumps(condition_dict)))
-                            except:
-                                traceback.logger.log_exc()
-                                logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
-                                    "completed." % VERDICT_SERVER_URL)
-                                exit()
-                            instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (
-                                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
-                                branching_condition_id)
-                            instrument_ast = ast.parse(instrument_code).body[0]
-                            vertex_information[1].orelse.insert(0, instrument_ast)
-                            logger.log("Branch recording instrument placed")
-                        elif vertex_information[0] in ['post-conditional', 'post-try-catch']:
-                            if vertex_information[0] == 'post-conditional':
-                                logger.log("Processing post conditional path instrument")
-                                logger.log(vertex_information)
-                                # need this to decide if we've left a conditional, since paths lengths reset after
-                                # conditionals
-                                logger.log(
-                                    "Placing branch recording instrument for end of conditional at %s - %i in parent "
-                                    "block - line no %i" % \
-                                    (vertex_information[1],
-                                     vertex_information[1]._parent_body.index(vertex_information[1]),
-                                     vertex_information[1].lineno))
-
-                                condition_dict = {
-                                    "serialised_condition": "conditional exited"
-                                }
-                            else:
-                                logger.log("Processing post try-catch path instrument")
-                                logger.log(vertex_information)
-                                # need this to decide if we've left a conditional, since paths lengths reset after
-                                # conditionals
-                                logger.log(
-                                    "Placing branch recording instrument for end of try-catch at %s - %i in parent "
-                                    "block - line no %i" % \
-                                    (vertex_information[1],
-                                     vertex_information[1]._parent_body.index(vertex_information[1]),
-                                     vertex_information[1].lineno))
-
-                                condition_dict = {
-                                    "serialised_condition": "try-catch exited"
-                                }
-                            try:
-                                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
-                                                                                    data=json.dumps(condition_dict)))
-                            except:
-                                traceback.logger.log_exc()
-                                logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
-                                    "completed." % VERDICT_SERVER_URL)
-                                exit()
-                            instrument_code = "%s((\"%s\", \"path\", \"%s\", %i))" % (
-                                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
-                                branching_condition_id)
-                            instrument_code_ast = ast.parse(instrument_code).body[0]
-
-                            index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1]) + 1
-                            logger.log(vertex_information[1]._parent_body)
-                            logger.log(index_in_parent)
-                            vertex_information[1]._parent_body.insert(index_in_parent, instrument_code_ast)
-                            logger.log(vertex_information[1]._parent_body)
-                        elif vertex_information[0] == 'loop':
-                            logger.log(
-                                "Placing branch recording instrument for loop with first instruction %s in body" %
-                                vertex_information[1])
-                            condition_dict = {
-                                "serialised_condition": pickle.dumps(vertex_information[2])
-                            }
-                            # if the condition already exists in the database, the verdict server will return the
-                            # existing ID
-                            try:
-                                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
-                                                                                    data=json.dumps(condition_dict)))
-                            except:
-                                traceback.logger.log_exc()
-                                logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
-                                    "completed." % VERDICT_SERVER_URL)
-                                exit()
-                            instrument_code_inside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (
-                                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
-                                branching_condition_id)
-                            instrument_inside_loop_ast = ast.parse(instrument_code_inside_loop).body[0]
-
-                            condition_dict = {
-                                "serialised_condition": pickle.dumps(vertex_information[4])
-                            }
-                            # if the condition already exists in the database, the verdict server will return the
-                            # existing ID
-                            try:
-                                branching_condition_id = int(post_to_verdict_server("store_branching_condition/",
-                                                                                    data=json.dumps(condition_dict)))
-                            except:
-                                traceback.logger.log_exc()
-                                logger.log(
-                                    "There was a problem with the verdict server at '%s'.  Instrumentation cannot be "
-                                    "completed." % VERDICT_SERVER_URL)
-                                exit()
-                            instrument_code_outside_loop = "%s((\"%s\", \"path\", \"%s\", %i))" % (
-                                VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
-                                branching_condition_id)
-                            instrument_outside_loop_ast = ast.parse(instrument_code_outside_loop).body[0]
-
-                            # insert at beginning of loop body
-                            inside_index_in_parent = vertex_information[1]._parent_body.index(vertex_information[1])
-                            # insert just after loop body
-                            outside_index_in_parent = vertex_information[3]._parent_body.index(
-                                vertex_information[3]) + 1
-
-                            vertex_information[1]._parent_body.insert(inside_index_in_parent,
-                                                                      instrument_inside_loop_ast)
-                            vertex_information[3]._parent_body.insert(outside_index_in_parent,
-                                                                      instrument_outside_loop_ast)
-                            logger.log("Branch recording instrument for conditional placed")
-
-                    logger.log("=" * 100)
-
                 # finally, insert an instrument at the beginning to tell the monitoring thread that a new call of the
                 # function has started and insert one at the end to signal a return
-
-                # NOTE: only problem with this is that the "end" instrument is inserted before the return,
-                # so a function call in the return statement maybe missed if it's part of verification...
-                thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
-                vypr_datetime_import = "from datetime import datetime as vypr_dt"
-                vypr_start_time_instrument = "vypr_start_time = vypr_dt.now();"
-                start_instrument = \
-                    "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
-                    % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
-
-                threading_import_ast = ast.parse(thread_id_capture).body[0]
-                thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
-                vypr_datetime_import_ast = ast.parse(vypr_datetime_import).body[0]
-                vypr_start_time_ast = ast.parse(vypr_start_time_instrument).body[0]
-                start_ast = ast.parse(start_instrument).body[0]
-
-                threading_import_ast.lineno = function_def.body[0].lineno
-                thread_id_capture_ast.lineno = function_def.body[0].lineno
-                vypr_datetime_import_ast.lineno = function_def.body[0].lineno
-                vypr_start_time_ast.lineno = function_def.body[0].lineno
-                start_ast.lineno = function_def.body[0].lineno
-
-                function_def.body.insert(0, start_ast)
-                function_def.body.insert(0, thread_id_capture_ast)
-                function_def.body.insert(0, threading_import_ast)
-                function_def.body.insert(0, vypr_start_time_ast)
-                function_def.body.insert(0, vypr_datetime_import_ast)
-
-                # insert the end instrument before every return statement
-                for end_vertex in scfg.return_statements:
-                    end_instrument =\
-                        "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id))"\
-                        % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
-                    end_ast = ast.parse(end_instrument).body[0]
-
-                    end_ast.lineno = end_vertex._previous_edge._instruction._parent_body[-1].lineno
-
-                    logger.log("Placing end instrument at line %i." % end_ast.lineno)
-
-                    insertion_position = len(end_vertex._previous_edge._instruction._parent_body) - 1
-
-                    end_vertex._previous_edge._instruction._parent_body.insert(insertion_position, end_ast)
-
-                    logger.log(end_vertex._previous_edge._instruction._parent_body)
-
-                # if the last instruction in the ast is not a return statement, add an end instrument at the end
-                if not (type(function_def.body[-1]) is ast.Return):
-                    end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\"))" \
-                                     % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
-                                        formula_hash)
-                    end_ast = ast.parse(end_instrument).body[0]
-
-                    logger.log("Placing end instrument at the end of the function body.")
-
-                    function_def.body.insert(len(function_def.body), end_ast)
+                place_function_begin_instruments(function_def, formula_hash, instrument_function_qualifier)
+                # also insert instruments at the end(s) of the function
+                place_function_end_instruments(function_def, scfg, formula_hash, instrument_function_qualifier)
 
                 # write the instrumented scfg to a file
                 instrumented_scfg = CFG()
@@ -1302,6 +1306,14 @@ if __name__ == "__main__":
                 # now, load the map back in and reconstruct it to test
                 instrumentation_map = pickle.loads(open(instrumentation_data_dump_file, "rb").read())
 
+            # explanation instrumentation is performed for each function, independently of properties
+            # note that this also means giving an empty list [] will result in path instrumentation
+            # without property instrumentation
+            if EXPLANATION:
+                logger.log("=" * 100)
+                logger.log("Placing path recording instruments.")
+                place_path_recording_instruments(scfg)
+
         backup_file_name = "%s.py.inst" % file_name_without_extension
 
         instrumented_code = compile(asts, backup_file_name, "exec")
@@ -1323,7 +1335,7 @@ if __name__ == "__main__":
         logger.log("Renaming original file to .py.inst suffix")
         os.rename("%s.py" % file_name_without_extension, "%s.py.inst" % file_name_without_extension)
 
-        logger.log("Instrumentation complete.  If VyPR is imported and activated, monitoring will now work.")
+    logger.log("Instrumentation complete.  If VyPR is imported and activated, monitoring will now work.")
 
-        # close instrumentation log
-        logger.end_logging()
+    # close instrumentation log
+    logger.end_logging()
