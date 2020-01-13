@@ -1289,23 +1289,10 @@ if __name__ == "__main__":
                                     function.replace(".", "-")))
 
                 # check for existence of directories for intermediate data and create them if not found
-                if not(os.path.isdir("instrumentation_maps")):
-                    os.mkdir("instrumentation_maps")
                 if not(os.path.isdir("binding_spaces")):
                     os.mkdir("binding_spaces")
                 if not(os.path.isdir("index_hash")):
                     os.mkdir("index_hash")
-
-                # write the instrumentation map to the intermediate dump file
-
-                # pickle the static qd map
-                pickled_map = pickle.dumps(static_qd_to_point_map)
-
-                # write to a file
-                instrumentation_data_dump_file = "instrumentation_maps/module-%s-function-%s-property-%s.dump" % \
-                                                 (module.replace(".", "-"), function.replace(".", "-"), formula_hash)
-                with open(instrumentation_data_dump_file, "wb") as h:
-                    h.write(pickled_map)
 
                 # pickle binding space
                 pickled_binding_space = pickle.dumps(bindings)
@@ -1322,9 +1309,6 @@ if __name__ == "__main__":
                                           (module.replace(".", "-"), function.replace(".", "-"))
                 with open(index_to_hash_dump_file, "wb") as h:
                     h.write(pickled_index_hash)
-
-                # now, load the map back in and reconstruct it to test
-                instrumentation_map = pickle.loads(open(instrumentation_data_dump_file, "rb").read())
 
             # explanation instrumentation is performed for each function, independently of properties
             # note that this also means giving an empty list [] will result in path instrumentation

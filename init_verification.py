@@ -190,7 +190,6 @@ def consumption_thread_function(verification_obj):
 
         # get the maps we need for this function
         maps = verification_obj.function_to_maps[function_name][property_hash]
-        static_qd_to_point_map = maps.static_qd_to_point_map
         static_qd_to_monitors = maps.static_qd_to_monitors
         formula_structure = maps.formula_structure
         bindings = maps.binding_space
@@ -440,11 +439,6 @@ class PropertyMapGroup(object):
         self._function_name = function_name
         self._property_hash = property_hash
 
-        # read in instrumentation map
-        with open(os.path.join(PROJECT_ROOT, "instrumentation_maps/module-%s-function-%s-property-%s.dump") % \
-                  (module_name.replace(".", "-"), function_name.replace(":", "-"), property_hash), "rb") as h:
-            instr_map_dump = h.read()
-
         # read in binding spaces
         with open(os.path.join(PROJECT_ROOT, "binding_spaces/module-%s-function-%s-property-%s.dump") % \
                   (module_name.replace(".", "-"), function_name.replace(":", "-"), property_hash), "rb") as h:
@@ -479,7 +473,6 @@ class PropertyMapGroup(object):
         # might just change the syntax in the verification conf file at some point to use : instead of .
         self.formula_structure = verification_conf[module_name][function_name.replace(":", ".")][property_index]
         self.binding_space = pickle.loads(binding_space_dump)
-        self.static_qd_to_point_map = pickle.loads(instr_map_dump)
         self.static_qd_to_monitors = {}
         self.static_bindings_to_monitor_states = {}
         self.static_bindings_to_trigger_points = {}
