@@ -382,10 +382,11 @@ def consumption_thread_function(verification_obj):
             atom_sub_index = top_pair[4]
             instrumentation_point_db_ids = top_pair[5]
             observation_time = top_pair[6]
-            observed_value = top_pair[7]
-            thread_id = top_pair[8]
+            observation_end_time = top_pair[7]
+            observed_value = top_pair[8]
+            thread_id = top_pair[9]
             try:
-                state_dict = top_pair[9]
+                state_dict = top_pair[10]
             except:
                 # instrument isn't from a transition measurement
                 state_dict = None
@@ -404,6 +405,7 @@ def consumption_thread_function(verification_obj):
                 vypr_output("Atom sub index : %i" % atom_sub_index)
                 vypr_output("Instrumentation point db id : %i" % instrumentation_point_db_id)
                 vypr_output("Observation time : %s" % str(observation_time))
+                vypr_output("Observation end time : %s" % str(observation_end_time))
                 vypr_output("Observed value : %s" % observed_value)
                 vypr_output("State dictionary : %s" % str(state_dict))
 
@@ -413,8 +415,8 @@ def consumption_thread_function(verification_obj):
                 if static_qd_to_monitors.get(static_qd_index):
                     for (n, monitor) in enumerate(static_qd_to_monitors[static_qd_index]):
                         # checking for previous observation of the atom is done by the monitor's internal logic
-                        monitor.process_atom_and_value(instrumentation_atom, observation_time, observed_value,
-                                                       atom_index, atom_sub_index,
+                        monitor.process_atom_and_value(instrumentation_atom, observation_time, observation_end_time,
+                                                       observed_value, atom_index, atom_sub_index,
                                                        inst_point_id=instrumentation_point_db_id,
                                                        program_path=len(program_path), state_dict=state_dict)
 

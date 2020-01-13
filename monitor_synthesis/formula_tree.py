@@ -827,7 +827,7 @@ class Checker(object):
             result = None
         return result
 
-    def process_atom_and_value(self, atom, observation_time, value, atom_index, atom_sub_index,
+    def process_atom_and_value(self, atom, observation_time, observation_end_time, value, atom_index, atom_sub_index,
                                force_monitor_update=False, inst_point_id=None,
                                program_path=None, state_dict=None):
         """
@@ -841,7 +841,8 @@ class Checker(object):
             self.atom_to_state_dict[atom_index] = {}
 
         if not (self.atom_to_observation[atom_index].get(atom_sub_index)):
-            self.atom_to_observation[atom_index][atom_sub_index] = (value, inst_point_id, observation_time)
+            self.atom_to_observation[atom_index][atom_sub_index] =\
+                (value, inst_point_id, observation_time, observation_end_time)
             # self.atom_to_program_path[atom_index][atom_sub_index] = [v for v in program_path]
             # we deal with integer indices now, so no need to copy a list
             self.atom_to_program_path[atom_index][atom_sub_index] = program_path

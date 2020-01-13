@@ -352,10 +352,14 @@ def instrument_point_state(state, name, point, binding_space_indices,
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
 
+    # note that observed_value is used three times:
+    # 1) to capture the time attained by the state for checking of a property - this is duplicated
+    #    because we have the start and end time of the state, which is the same because states are instantaneous.
+    # 3) to capture the time at which an observation was received - it makes sense that these times would
+    #    be the same.
     instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, "
                         "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {observed_value}, "
-                        "{{ '{atom_program_variable}' "
-                        ": {observed_value} }}, __thread_id") \
+                        "{observed_value}, {{ '{atom_program_variable}' : {observed_value} }}, __thread_id") \
         .format(
         formula_hash=formula_hash,
         function_qualifier=instrument_function_qualifier,
@@ -443,8 +447,8 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
 
     time_difference_statement = "__duration = __timer_e - __timer_s; "
     instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," +
-                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {obs_time}, {observed_value}, "
-                        "__thread_id, {state_dict}") \
+                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {obs_time}, {obs_end_time}, "
+                        "{observed_value}, __thread_id, {state_dict}") \
         .format(
         formula_hash=formula_hash,
         function_qualifier=instrument_function_qualifier,
@@ -453,6 +457,7 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
         atom_sub_index=atom_sub_index,
         instrumentation_point_db_id=instrumentation_point_db_ids,
         obs_time="__timer_s",
+        obs_end_time="__timer_e",
         observed_value="__duration",
         state_dict=state_dict
     )
