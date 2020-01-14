@@ -262,7 +262,7 @@ def consumption_thread_function(verification_obj):
                     maps.program_path,
                     verdict_report,
                     binding_to_line_numbers,
-                    top_pair[3],
+                    verification_obj.transaction_start_time,
                     top_pair[4]
                 )
 
@@ -525,6 +525,9 @@ class Verification(object):
 
         vypr_output("Initialising VyPR alongside service.")
 
+        # we count the transaction start time as the time when VyPR starts up
+        self.transaction_start_time = datetime.datetime.now()
+
         # read configuration file
         inst_configuration = read_configuration("vypr.config")
         global VERDICT_SERVER_URL, VYPR_OUTPUT_VERBOSE, PROJECT_ROOT
@@ -590,8 +593,6 @@ class Verification(object):
         if not (self.initialisation_failure):
             vypr_output("Ending VyPR monitoring thread.")
             self.consumption_queue.put(("end-monitoring",))
-            # delete the specification file written by instrumentation
-            os.remove("VyPR_queries_with_imports.py")
 
     def pause_monitoring(self):
         if not (self.initialisation_failure):
