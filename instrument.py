@@ -1087,12 +1087,14 @@ if __name__ == "__main__":
                                     point_to_triples[point] = {}
 
                                 atom_index_in_db = atom_index_to_db_index[atom_index]
+                                # for now, we don't need serialised_condition_sequence so we just use a blank string
                                 instrumentation_point_dictionary = {
                                     "binding": binding_db_id,
-                                    "serialised_condition_sequence": list(
-                                        map(pickle.dumps, point._previous_edge._condition
-                                        if type(point) is CFGVertex else point._condition)
-                                    ),
+                                    #"serialised_condition_sequence": list(
+                                    #    map(pickle.dumps, point._previous_edge._condition
+                                    #    if type(point) is CFGVertex else point._condition)
+                                    #),
+                                    "serialised_condition_sequence" : "",
                                     "reaching_path_length": point._path_length if type(
                                         point) is CFGVertex else point._target_state._path_length,
                                     "atom": atom_index_to_db_index[atom_index]
