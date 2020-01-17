@@ -541,7 +541,7 @@ class Verification(object):
         # we need the list of functions that we have instrumentation data from, so read the instrumentation maps
         # directory
         dump_files = filter(lambda filename: ".dump" in filename,
-                            os.listdir(os.path.join(PROJECT_ROOT, "instrumentation_maps")))
+                            os.listdir(os.path.join(PROJECT_ROOT, "binding_spaces")))
         functions_and_properties = map(lambda function_dump_file: function_dump_file.replace(".dump", ""), dump_files)
         tokens = map(lambda string: string.split("-"), functions_and_properties)
 
