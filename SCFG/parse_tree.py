@@ -60,10 +60,13 @@ class ParseTree(object):
             self._vertices = [self._root_vertex]
             self._all_paths = []
 
-    def expand_vertex(self, vertex):
+    def expand_vertex(self, vertex, level=0):
         """Given a vertex in the parse tree, expand it using self._rules
         to generate its child nodes"""
+        indent = " "*level
+        # print("%s Processing rule %s" % (indent, vertex._symbol))
         # get the rules associated with the symbol held by this vertex
+        # print("%s Path generated so far: %s\n" % (indent, self._path_progress))
         rules = self._rules[vertex._symbol]
         if len(rules) > 1:
             progress_length = len(self._path_progress)
@@ -73,13 +76,17 @@ class ParseTree(object):
             for rule in rules:
                 if rule[0] == first_relevant_symbol:
                     rule_to_use = rule
+                    # print("%sUsing rule %s\n" % (indent, rule_to_use))
                     rule_found = True
             if not (rule_found):
                 print(
-                    "no rule found at vertex %s to generate %s...  this is an error and will give incomplete comparison." % (
-                        vertex._symbol, first_relevant_symbol))
+                    "%s no rule found at vertex %s to generate %s...  this is an error and will give incomplete "
+                    "comparison.  Exiting." % (
+                        indent, vertex._symbol, first_relevant_symbol))
+                exit()
         else:
             rule_to_use = rules[0]
+            # print("%s Using only rule %s\n" % (indent, rule_to_use))
 
         for symbol in rule_to_use:
             child_vertex = ParseTreeVertex(symbol)
@@ -93,7 +100,7 @@ class ParseTree(object):
                     return False
             elif type(symbol) is CFGVertex:
                 # non-terminal symbol
-                result = self.expand_vertex(child_vertex)
+                result = self.expand_vertex(child_vertex, level+1)
                 if result == False:
                     return False
             else:

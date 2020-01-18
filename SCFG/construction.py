@@ -695,7 +695,12 @@ class CFG(object):
 
                 final_map[vertex] = []
                 for edge in vertex.edges:
-                    final_map[vertex].append([edge, edge._target_state])
+                    # we check whether we're looking at an edge that leads straight past the conditional
+                    # and directly to the post-conditional vertex
+                    if edge._target_state._name_changed == ["post-conditional"]:
+                        final_map[vertex].append([edge])
+                    else:
+                        final_map[vertex].append([edge, edge._target_state])
 
             elif vertex._name_changed == ["post-conditional"]:
 
