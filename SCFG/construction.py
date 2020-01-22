@@ -102,17 +102,16 @@ def get_attr_name_string(obj, omit_subscripts=False):
 class CFGVertex(object):
     """
     This class represents a vertex in a control flow graph.
-    Vertices correspond to states - a new state is induced when the value to which
-    a name is mapped in Python code is changed.
     """
 
     def __init__(self, entry=None, path_length=None, structure_obj=None, reference_variables=[]):
         """
-        Given the name changed in the state this vertex represents,
-        store it.
-        Vertices can also have multiple edges leading out of them into next states.
+        Given the name changed in the state this vertex represents, store it.
         """
+        # the distance from the last branching point to this vertex
         self._path_length = path_length
+        # structure_obj is so vertices for control-flow such as conditionals and loops have a reference
+        # to the ast object that generated them
         self._structure_obj = structure_obj
         if not (entry):
             self._name_changed = []
@@ -121,11 +120,13 @@ class CFGVertex(object):
                 # only works for a single function being called - should make this recursive
                 # for complex expressions that require multiple calls
                 if type(entry.targets[0]) is ast.Tuple:
-                    self._name_changed = list(map(get_attr_name_string, entry.targets[0].elts) + get_function_name_strings(
-                        entry))
+                    self._name_changed = list(
+                        list(map(get_attr_name_string, entry.targets[0].elts)) + get_function_name_strings(entry)
+                    )
                 else:
                     self._name_changed = [get_attr_name_string(entry.targets[0])] + get_function_name_strings(entry)
-            # TODO: include case where the expression on the right hand side of the assignment is an expression with a call
+            # TODO: include case where the expression on the right hand side of the assignment is an expression with
+            #  a call
             elif type(entry) is ast.Expr and type(entry.value) is ast.Call:
                 # if there are reference variables, we include them as possibly changed
                 self._name_changed = get_function_name_strings(entry.value) + (
@@ -142,6 +143,8 @@ class CFGVertex(object):
                 self._name_changed = [entry.type.func.id]
             elif type(entry) is ast.Pass:
                 self._name_changed = ["pass"]
+            elif type(entry) is ast.Continue:
+                self._name_changed = ["continue"]
 
         self.edges = []
         self._previous_edge = None
@@ -159,7 +162,7 @@ class CFGEdge(object):
     This class represents an edge in a control flow graph.
     """
 
-    def __init__(self, condition, instruction=None, input_variables=[]):
+    def __init__(self, condition, instruction=None):
         # the condition has to be copied, otherwise later additions to the condition on the same branch
         # for example, to indicate divergence and convergence of control flow
         # will also be reflected in conditions earlier in the branch
@@ -167,7 +170,6 @@ class CFGEdge(object):
         self._instruction = instruction
         self._source_state = None
         self._target_state = None
-        self._input_variables = input_variables
 
         if type(self._instruction) is ast.Assign and type(self._instruction.value) in [ast.Call, ast.Expr]:
             # we will have to deal with other kinds of expressions at some point
@@ -217,19 +219,18 @@ class CFG(object):
         self.return_statements = []
         self.branch_initial_statements = []
         self.reference_variables = reference_variables
+        # we have a stack of continue vertices so we can construct edges going from continue vertices
+        # to the end of loops once they've been computed
+        self.continue_vertex_stack = []
 
-    def process_block(self, block, starting_vertices=None, condition=[], input_variables=[]):
+    def process_block(self, block, starting_vertices=None, condition=[], closest_loop=None):
         """
         Given a block, a set of starting vertices and to put on the first edge,
         construct the section of the control flow graph corresponding to this block.
-        Input variables is a list of variables that reach this block of the code by means other than assignment.
-        For example, arguments to a function call (the body of which we construct the SCFG) or loop variables.
         """
         # make a copy of the condition sequence for this branch
         condition = [c for c in condition]
         current_vertices = starting_vertices if not (starting_vertices is None) else [self.starting_vertices]
-        # make sure each block that is not nested has independent input variables
-        input_variables_copy = [s for s in input_variables]
         path_length = 0
 
         for (n, entry) in enumerate(block):
@@ -238,14 +239,12 @@ class CFG(object):
                 path_length += 1
                 # print("processing assignment")
 
-                # condition_to_use = condition if n == 0 else []
-
                 # for each vertex in current_vertices, add an edge
                 new_edges = []
                 for vertex in current_vertices:
                     entry._parent_body = block
                     # print("constructing new edge")
-                    new_edge = CFGEdge(condition, entry, input_variables=input_variables_copy)
+                    new_edge = CFGEdge(condition, entry)
                     new_edges.append(new_edge)
                     vertex.add_outgoing_edge(new_edge)
 
@@ -271,7 +270,7 @@ class CFG(object):
                 for vertex in current_vertices:
                     entry._parent_body = block
                     # print("constructing new edge")
-                    new_edge = CFGEdge(condition, entry, input_variables=input_variables_copy)
+                    new_edge = CFGEdge(condition, entry)
                     new_edges.append(new_edge)
                     vertex.add_outgoing_edge(new_edge)
 
@@ -291,12 +290,10 @@ class CFG(object):
             elif type(entry) is ast.Return:
                 path_length += 1
 
-                # condition_to_use = condition if n == 0 else []
-
                 new_edges = []
                 for vertex in current_vertices:
                     entry._parent_body = block
-                    new_edge = CFGEdge(condition, entry, input_variables=input_variables_copy)
+                    new_edge = CFGEdge(condition, entry)
                     new_edges.append(new_edge)
                     vertex.add_outgoing_edge(new_edge)
 
@@ -317,12 +314,10 @@ class CFG(object):
             elif type(entry) is ast.Raise:
                 path_length += 1
 
-                # condition_to_use = condition if n == 0 else []
-
                 new_edges = []
                 for vertex in current_vertices:
                     entry._parent_body = block
-                    new_edge = CFGEdge(condition, entry, input_variables=input_variables_copy)
+                    new_edge = CFGEdge(condition, entry)
                     new_edges.append(new_edge)
                     vertex.add_outgoing_edge(new_edge)
 
@@ -338,42 +333,71 @@ class CFG(object):
                 # update current vertices
                 current_vertices = [new_vertex]
 
-            elif type(entry) is ast.If:
-                entry._parent_body = block
-                # print("Processing conditional at line %i with parent block %s" % (entry.lineno, entry._parent_body))
+            elif type(entry) is ast.Break:
+                # we assume that we're inside a loop
+                # this instruction doesn't generate a vertex - rather it generates an edge
+                # leading to the ending vertex given by closest_loop
                 path_length += 1
 
+                loop_ending_edge = CFGEdge("break", "break")
+                self.edges.append(loop_ending_edge)
+                loop_ending_edge.set_target_state(closest_loop)
+                for vertex in current_vertices:
+                    vertex.add_outgoing_edge(loop_ending_edge)
+
+                # direct all new edges to this new vertex
+                for edge in new_edges:
+                    edge.set_target_state(new_vertex)
+
+                # set the current_vertices to empty so no constructs can make an edge
+                # from the preceding statement
+                current_vertices = []
+
+            elif type(entry) is ast.Continue:
+                # we assume that we're inside a loop
+                # this instruction generates a continue vertex
+                # which is picked up by the post-loop processing so an edge can be added from this vertex
+                # to the last vertex of the loop body
+                path_length += 1
+
+                new_edges = []
+                for vertex in current_vertices:
+                    entry._parent_body = block
+                    new_edge = CFGEdge(condition, entry)
+                    new_edges.append(new_edge)
+                    vertex.add_outgoing_edge(new_edge)
+
+                new_vertex = CFGVertex(entry)
+
+                self.vertices.append(new_vertex)
+                self.edges += new_edges
+
+                # direct all new edges to this new vertex
+                for edge in new_edges:
+                    edge.set_target_state(new_vertex)
+
+                # add this continue vertex to the continue vertex stack
+                self.continue_vertex_stack.append(new_vertex)
+
+                # continue ends control-flow on this branch, so we can return to processing the block above
+                return []
+
+            elif type(entry) is ast.If:
+
+                entry._parent_body = block
+                path_length += 1
+
+                # if this conditional isn't the last element in its block, we need to place a post-conditional
+                # path recording instrument after it
                 if entry != entry._parent_body[-1]:
                     self.branch_initial_statements.append(["post-conditional", entry])
-
-                # if we just have an if without an else block, this misses out the edge going from the state
-                # before the conditional to the state after it (if the condition is false)
-                # compute a list of pairs (condition, block) derived from the conditional
-                pairs = [([entry.test], entry.body)]
-
-                current_condition_set = [formula_tree.lnot(entry.test)]
-
-                current_conditional = [entry]
-                final_else_is_present = False
-                # won't work when there is something after the second if in the else clause
-                while type(current_conditional[0]) is ast.If:
-                    current_conditional = current_conditional[0].orelse
-                    if len(current_conditional) > 0:
-                        if type(current_conditional[0]) is ast.If:
-                            pairs.append(
-                                (current_condition_set + [current_conditional[0].test], current_conditional[0].body))
-                            current_condition_set.append(formula_tree.lnot(current_conditional[0].test))
-                        else:
-                            pairs.append((current_condition_set, current_conditional))
-                            final_else_is_present = True
-                    else:
-                        # nowhere else to go in the traversal
-                        break
 
                 # insert intermediate control flow vertex at the beginning of the block
                 empty_conditional_vertex = CFGVertex(structure_obj=entry)
                 empty_conditional_vertex._name_changed = ['conditional']
                 self.vertices.append(empty_conditional_vertex)
+
+                # connect empty_conditional_vertex to the graph constructed so far
                 for vertex in current_vertices:
                     new_edge = CFGEdge("conditional", "control-flow")
                     self.edges.append(new_edge)
@@ -381,30 +405,88 @@ class CFG(object):
                     new_edge.set_target_state(empty_conditional_vertex)
                 current_vertices = [empty_conditional_vertex]
 
-                # add the branches to the graph
+                # process the conditional block
+                current_conditional = [entry]
+                final_else_is_present = False
                 final_conditional_vertices = []
-                for (n, pair) in enumerate(pairs):
-                    final_vertices = self.process_block(pair[1], current_vertices, pair[0],
-                                                        input_variables=input_variables_copy)
-                    final_conditional_vertices += final_vertices
-                    self.branch_initial_statements.append(["conditional", pair[1][0], n])
-                # vertices += final_vertices
+                branch_number = 0
 
-                # the disjunction of formulas that could each have been followed for control flow to continue after
-                # the if-statement
-                disjunction_for_after_branch = current_condition_set  # + map(formula_tree.lnot, current_condition_set)
+                # process the main body, and then iterate downwards
+                final_vertices = self.process_block(
+                    current_conditional[0].body,
+                    current_vertices,
+                    [current_conditional[0].test],
+                    closest_loop
+                )
+                # add to the list of final vertices that need to be connected to the post-conditional vertex
+                final_conditional_vertices += final_vertices
+                # add the branching statement
+                self.branch_initial_statements.append(
+                    ["conditional", current_conditional[0].body[0], branch_number]
+                )
+                branch_number += 1
 
-                # print(final_conditional_vertices)
+                # we now repeat the same, but iterating through the conditional structure
+                while type(current_conditional[0]) is ast.If:
+                    current_conditional = current_conditional[0].orelse
+                    if len(current_conditional) == 1:
+
+                        # there is just another conditional block, so process it as if it were a branch
+                        if type(current_conditional[0]) is ast.If:
+                            # pairs.append(
+                            #     (current_condition_set + [current_conditional[0].test], current_conditional[0].body))
+                            # current_condition_set.append(formula_tree.lnot(current_conditional[0].test))
+                            final_vertices = self.process_block(
+                                current_conditional[0].body,
+                                current_vertices,
+                                [current_conditional[0].test],
+                                closest_loop
+                            )
+
+                        else:
+                            #pairs.append((current_condition_set, current_conditional))
+                            final_vertices = self.process_block(
+                                current_conditional,
+                                current_vertices,
+                                ["else"],
+                                closest_loop
+                            )
+                            # we reached an else block
+                            final_else_is_present = True
+
+                        # add to the list of final vertices that need to be connected to the post-conditional vertex
+                        final_conditional_vertices += final_vertices
+                        # add the branching statement
+                        self.branch_initial_statements.append(
+                            ["conditional", current_conditional[0].body[0], branch_number]
+                        )
+                        branch_number += 1
+
+                    elif len(current_conditional) > 1:
+                        # there are multiple blocks inside the orelse, so we can't treat this like another branch
+                        final_vertices = self.process_block(
+                            current_conditional,
+                            current_vertices,
+                            ["else"],
+                            closest_loop
+                        )
+                        final_conditional_vertices += final_vertices
+                        self.branch_initial_statements.append(
+                            ["conditional", current_conditional[0], branch_number]
+                        )
+                        # we reached an else block
+                        final_else_is_present = True
+                    else:
+                        # nowhere else to go in the traversal
+                        break
 
                 # we include the vertex before the conditional, only if there was no else
                 if not (final_else_is_present):
                     # we add a branching statement - the branch number is just the number of pairs we found
-                    self.branch_initial_statements.append(["conditional-no-else", entry, len(pairs)])
+                    self.branch_initial_statements.append(["conditional-no-else", entry, branch_number])
                     current_vertices = final_conditional_vertices + current_vertices
                 else:
                     current_vertices = final_conditional_vertices
-
-                # print(current_vertices)
 
                 # filter out vertices that were returns or raises
                 # here we have to check for the previous edge existing, in case the program starts with a conditional
@@ -434,10 +516,6 @@ class CFG(object):
                 else:
                     empty_conditional_vertex.post_conditional_vertex = None
 
-                # for now, the path length is wrt the start of the current branch, so intermediate branching doesn't matter
-                # condition_copy = [c for c in condition]
-                # condition_copy.append(disjunction_for_after_branch)
-                # condition = condition_copy
                 condition.append("skip-conditional")
 
                 # reset path length for instructions after conditional
@@ -480,8 +558,12 @@ class CFG(object):
                 # first process entry.body
                 final_try_catch_vertices = []
 
-                final_vertices = self.process_block(entry.body, current_vertices, ['try-catch-main'],
-                                                    input_variables=input_variables_copy)
+                final_vertices = self.process_block(
+                    entry.body,
+                    current_vertices,
+                    ['try-catch-main'],
+                    closest_loop
+                )
                 final_try_catch_vertices += final_vertices
 
                 # now process the except handlers - eventually with some identifier for each branch
@@ -489,8 +571,12 @@ class CFG(object):
                 for block_item in blocks:
                     # print(block_item)
                     # print("="*10)
-                    final_vertices = self.process_block(block_item, current_vertices, ['try-catch-handler'],
-                                                        input_variables=input_variables_copy)
+                    final_vertices = self.process_block(
+                        block_item,
+                        current_vertices,
+                        ['try-catch-handler'],
+                        closest_loop
+                    )
                     final_try_catch_vertices += final_vertices
                 # print("="*10)
 
@@ -557,8 +643,12 @@ class CFG(object):
                     additional_input_variables = [loop_variable.id]
                 elif type(loop_variable) is ast.Tuple:
                     additional_input_variables = list(map(lambda item: item.id, loop_variable.elts))
-                final_vertices = self.process_block(entry.body, current_vertices, ['enter-loop'],
-                                                    input_variables=input_variables_copy + additional_input_variables)
+                final_vertices = self.process_block(
+                    entry.body,
+                    current_vertices,
+                    ['enter-loop'],
+                    empty_post_loop_vertex
+                )
 
                 # for a for loop, we add a path recording instrument at the beginning of the loop body
                 # and after the loop body
@@ -581,6 +671,14 @@ class CFG(object):
                         final_vertex.add_outgoing_edge(new_post_edge)
                         new_post_edge.set_target_state(empty_post_loop_vertex)
 
+                # process all of the continue vertices on the stack
+                for continue_vertex in self.continue_vertex_stack:
+                    new_edge = CFGEdge("post-loop", "post-loop")
+                    self.edges.append(new_edge)
+                    continue_vertex.add_outgoing_edge(new_edge)
+                    new_edge.set_target_state(empty_pre_loop_vertex)
+                    self.continue_vertex_stack.remove(continue_vertex)
+
                 skip_edge = CFGEdge(formula_tree.lnot(entry.iter), "loop-skip")
                 empty_pre_loop_vertex.add_outgoing_edge(skip_edge)
                 # skip_edge.set_target_state(final_vertices[0])
@@ -599,10 +697,10 @@ class CFG(object):
                 # need to add code to deal with branching vertices
                 path_length += 1
 
-                # this should be updated at some point to include empty pre and post-loop vertices like in the for loop clause above
+                # this should be updated at some point to include empty pre and post-loop vertices like in the for
+                # loop clause above
 
-                final_vertices = self.process_block(entry.body, current_vertices, ['while'],
-                                                    input_variables=input_variables_copy)
+                final_vertices = self.process_block(entry.body, current_vertices, ['while'], closest_loop)
 
                 for final_vertex in final_vertices:
                     for base_vertex in current_vertices:

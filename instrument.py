@@ -260,8 +260,7 @@ def write_scfg_to_file(scfg, file_name):
                     str(id(vertex)),
                     str(id(edge._target_state)),
                     "%s - %s - path length = %s" % \
-                    (str(edge._operates_on) \
-                         if not (type(edge._operates_on[0]) is ast.logger.log) else "logger.log stmt",
+                    (str(edge._operates_on),
                      edge._condition,
                      str(edge._target_state._path_length))
                 )
