@@ -247,8 +247,11 @@ def consumption_thread_function(verification_obj):
                     for bind_var in binding:
 
                         if type(bind_var) is CFGVertex:
-                            binding_to_line_numbers[bind_space_index].append(
-                                bind_var._previous_edge._instruction.lineno)
+                            if bind_var._name_changed == ["loop"]:
+                                binding_to_line_numbers[bind_space_index].append(bind_var._structure_obj.lineno)
+                            else:
+                                binding_to_line_numbers[bind_space_index].append(
+                                    bind_var._previous_edge._instruction.lineno)
                         elif type(bind_var) is CFGEdge:
                             binding_to_line_numbers[bind_space_index].append(bind_var._instruction.lineno)
 

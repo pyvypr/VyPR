@@ -116,6 +116,19 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
                 qd = list(filter(lambda symbolic_state: symbolic_state._name_changed == variable_changed \
                                                         or variable_changed in symbolic_state._name_changed,
                                  scfg.vertices))
+                # we also check loop variables
+                # when instruments are placed, if a loop vertex is processed instrumentation will change accordingly
+                for vertex in scfg.vertices:
+                    if vertex._name_changed == ["loop"]:
+                        if (type(vertex._structure_obj.target) is ast.Name and
+                                vertex._structure_obj.target.id == variable_changed):
+                            # the variable we're looking for was found as a simple loop variable
+                            qd.append(vertex)
+                            print("adding loop vertex to static binding")
+                        elif (type(vertex._structure_obj.target) is ast.Tuple and
+                              variable_changed in list(map(lambda item : item.id, vertex._structure_obj.target))):
+                            # the loop variable we're looking for was found inside a tuple
+                            qd.append(vertex)
             else:
                 qd = []
                 # a list of coordinates were given
@@ -401,21 +414,39 @@ def instrument_point_state(state, name, point, binding_space_indices,
             parent_block.insert(index_in_block + 1, record_state_ast)
     else:
 
-        logger.log("Not source or destination state - performing normal instrumentation.")
-        incident_edge = point._previous_edge
-        parent_block = incident_edge._instruction._parent_body
+        if point._name_changed == ["loop"]:
+            # we're instrumenting the change of a loop variable
+            logger.log("Performing instrumentation for loop variable.")
+            # determine the edge leading into the loop body
+            for edge in point.edges:
+                if edge._condition == ["enter-loop"]:
+                    # place an instrument before the instruction on this edge
+                    parent_block = edge._instruction._parent_body
+                    record_state_ast.lineno = edge._instruction.lineno
+                    record_state_ast.col_offset = edge._instruction.col_offset
+                    queue_ast.lineno = edge._instruction.lineno
+                    queue_ast.col_offset = edge._instruction.col_offset
+                    index_in_block = parent_block.index(edge._instruction)
+                    # insert instruments in reverse order
+                    parent_block.insert(index_in_block + 1, queue_ast)
+                    parent_block.insert(index_in_block + 1, record_state_ast)
+        else:
+            # we're instrumenting a normal vertex where there is an explicit instruction
+            logger.log("Not source or destination state - performing normal instrumentation.")
+            incident_edge = point._previous_edge
+            parent_block = incident_edge._instruction._parent_body
 
-        record_state_ast.lineno = incident_edge._instruction.lineno
-        record_state_ast.col_offset = incident_edge._instruction.col_offset
-        queue_ast.lineno = incident_edge._instruction.lineno
-        queue_ast.col_offset = incident_edge._instruction.col_offset
+            record_state_ast.lineno = incident_edge._instruction.lineno
+            record_state_ast.col_offset = incident_edge._instruction.col_offset
+            queue_ast.lineno = incident_edge._instruction.lineno
+            queue_ast.col_offset = incident_edge._instruction.col_offset
 
-        index_in_block = parent_block.index(incident_edge._instruction)
+            index_in_block = parent_block.index(incident_edge._instruction)
 
-        # insert instruments in reverse order
+            # insert instruments in reverse order
 
-        parent_block.insert(index_in_block + 1, queue_ast)
-        parent_block.insert(index_in_block + 1, record_state_ast)
+            parent_block.insert(index_in_block + 1, queue_ast)
+            parent_block.insert(index_in_block + 1, record_state_ast)
 
 
 def instrument_point_transition(atom, point, binding_space_indices, atom_index,
@@ -912,6 +943,7 @@ if __name__ == "__main__":
 
                 reachability_map = construct_reachability_map(scfg)
                 bindings = compute_binding_space(formula_structure, scfg, reachability_map)
+                print(bindings)
 
                 logger.log("Set of static bindings computed is")
                 logger.log(str(bindings))
@@ -957,12 +989,21 @@ if __name__ == "__main__":
                     logger.log("Processing binding %s" % element)
 
                     # send the binding to the verdict server
-                    get_line_number = lambda el: el._previous_edge._instruction.lineno if type(
-                        el) is CFGVertex else el._instruction.lineno
+
+                    line_numbers = []
+                    for el in element:
+                        if type(el) is CFGVertex:
+                            if el._name_changed != ["loop"]:
+                                line_numbers.append(el._previous_edge._instruction.lineno)
+                            else:
+                                line_numbers.append(el._structure_obj.lineno)
+                        else:
+                            line_numbers.append(el._instruction.lineno)
+
                     binding_dictionary = {
                         "binding_space_index": m,
                         "function": function_id,
-                        "binding_statement_lines": list(map(get_line_number, element))
+                        "binding_statement_lines": line_numbers
                     }
                     serialised_binding_dictionary = json.dumps(binding_dictionary)
                     try:
@@ -1055,7 +1096,14 @@ if __name__ == "__main__":
 
                         instrument_ast = ast.parse(instrument).body[0]
                         if type(point) is CFGVertex:
-                            instruction = point._previous_edge._instruction
+                            if point._name_changed == ["loop"]:
+                                # triggers for loop variables must be inserted inside the loop
+                                # so we instantiate a new monitor for every iteration
+                                for edge in point.edges:
+                                    if edge._condition == ["enter-loop"]:
+                                        instruction = edge._instruction
+                            else:
+                                instruction = point._previous_edge._instruction
                         else:
                             instruction = point._instruction
 
@@ -1087,6 +1135,18 @@ if __name__ == "__main__":
 
                                 atom_index_in_db = atom_index_to_db_index[atom_index]
                                 # for now, we don't need serialised_condition_sequence so we just use a blank string
+                                if type(point) is CFGVertex:
+                                    if point._name_changed == ["loop"]:
+                                        # find edge leading into loop body and use the path length for the destination
+                                        # state
+                                        for edge in point.edges:
+                                            if edge._condition == ["enter-loop"]:
+                                                reaching_path_length = edge._target_state._path_length
+                                    else:
+                                        reaching_path_length = point._path_length
+                                else:
+                                    reaching_path_length = point._target_state._path_length
+
                                 instrumentation_point_dictionary = {
                                     "binding": binding_db_id,
                                     #"serialised_condition_sequence": list(
@@ -1094,8 +1154,7 @@ if __name__ == "__main__":
                                     #    if type(point) is CFGVertex else point._condition)
                                     #),
                                     "serialised_condition_sequence" : "",
-                                    "reaching_path_length": point._path_length if type(
-                                        point) is CFGVertex else point._target_state._path_length,
+                                    "reaching_path_length": reaching_path_length,
                                     "atom": atom_index_to_db_index[atom_index]
                                 }
                                 serialised_dictionary = json.dumps(instrumentation_point_dictionary)

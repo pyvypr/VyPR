@@ -620,7 +620,7 @@ class CFG(object):
 
                 # this will eventually be modified to include the loop variable as the state changed
 
-                empty_pre_loop_vertex = CFGVertex()
+                empty_pre_loop_vertex = CFGVertex(structure_obj=entry)
                 empty_pre_loop_vertex._name_changed = ['loop']
                 empty_post_loop_vertex = CFGVertex()
                 empty_post_loop_vertex._name_changed = ['post-loop']
