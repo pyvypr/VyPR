@@ -765,7 +765,7 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
     # insert the end instrument before every return statement
     for end_vertex in scfg.return_statements:
         end_instrument = \
-            "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id, " \
+            "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
             "vypr_dt.now()))" \
             % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
         end_ast = ast.parse(end_instrument).body[0]
@@ -782,7 +782,7 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
 
     # if the last instruction in the ast is not a return statement, add an end instrument at the end
     if not (type(function_def.body[-1]) is ast.Return):
-        end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", vypr_start_time, \"%s\", __thread_id, " \
+        end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
                          "vypr_dt.now()))" \
                          % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
                             formula_hash)
