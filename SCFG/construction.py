@@ -25,10 +25,7 @@ AST decision functions - this allows us to support Python 2 and 3 at the same ti
 
 
 def ast_is_try(ast_obj):
-    if sys.version_info[0] < 3:
-        return type(ast_obj) is ast.TryExcept
-    else:
-        return type(ast_obj) is ast.Try
+    return type(ast_obj) is ast.Try
 
 
 def ast_is_assign(ast_obj):
@@ -502,8 +499,16 @@ class CFG(object):
                                 [current_conditional[0].test],
                                 closest_loop
                             )
+                            # add to the list of final vertices that need to be connected to the post-conditional vertex
+                            final_conditional_vertices += final_vertices
+                            # add the branching statement
+                            self.branch_initial_statements.append(
+                                ["conditional", current_conditional[0].body[0], branch_number]
+                            )
+                            branch_number += 1
 
                         else:
+                            # the else block contains an instruction that isn't a conditional
                             # pairs.append((current_condition_set, current_conditional))
                             final_vertices = self.process_block(
                                 current_conditional,
@@ -513,14 +518,13 @@ class CFG(object):
                             )
                             # we reached an else block
                             final_else_is_present = True
-
-                        # add to the list of final vertices that need to be connected to the post-conditional vertex
-                        final_conditional_vertices += final_vertices
-                        # add the branching statement
-                        self.branch_initial_statements.append(
-                            ["conditional", current_conditional[0].body[0], branch_number]
-                        )
-                        branch_number += 1
+                            # add to the list of final vertices that need to be connected to the post-conditional vertex
+                            final_conditional_vertices += final_vertices
+                            # add the branching statement
+                            self.branch_initial_statements.append(
+                                ["conditional", current_conditional[0], branch_number]
+                            )
+                            branch_number += 1
 
                     elif len(current_conditional) > 1:
                         # there are multiple blocks inside the orelse, so we can't treat this like another branch
