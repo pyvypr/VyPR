@@ -891,6 +891,12 @@ if __name__ == "__main__":
         datetime_import_ast.col_offset = asts.body[0].col_offset
         asts.body.insert(0, datetime_import_ast)
 
+        # if we're using flask, we assume a certain architecture
+        import_code = "import flask"
+        import_asts = ast.parse(import_code)
+        flask_import = import_asts.body[0]
+        asts.body.insert(0, flask_import)
+
         for function in verified_functions:
 
             logger.log("Processing function '%s'." % function)
