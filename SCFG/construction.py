@@ -12,12 +12,72 @@ This module contains logic for construction of a specialised control flow graph.
 """
 
 import ast
+import sys
 
-from graphviz import Digraph
 from VyPR.monitor_synthesis import formula_tree
 from VyPR.QueryBuilding import *
 
 vertices = []
+
+"""
+AST decision functions - this allows us to support Python 2 and 3 at the same time.
+"""
+
+
+def ast_is_try(ast_obj):
+    if sys.version_info[0] < 3:
+        return type(ast_obj) is ast.TryExcept
+    else:
+        return type(ast_obj) is ast.Try
+
+
+def ast_is_assign(ast_obj):
+    return type(ast_obj) is ast.Assign
+
+
+def ast_is_call(ast_obj):
+    return type(ast_obj) is ast.Call
+
+
+def ast_is_expr(ast_obj):
+    return type(ast_obj) is ast.Expr
+
+
+def ast_is_pass(ast_obj):
+    return type(ast_obj) is ast.Pass
+
+
+def ast_is_return(ast_obj):
+    return type(ast_obj) is ast.Return
+
+
+def ast_is_raise(ast_obj):
+    return type(ast_obj) is ast.Raise
+
+
+def ast_is_if(ast_obj):
+    return type(ast_obj) is ast.If
+
+
+def ast_is_for(ast_obj):
+    return type(ast_obj) is ast.For
+
+
+def ast_is_while(ast_obj):
+    return type(ast_obj) is ast.While
+
+
+def ast_is_continue(ast_obj):
+    return type(ast_obj) is ast.Continue
+
+
+def ast_is_break(ast_obj):
+    return type(ast_obj) is ast.Break
+
+
+"""
+End of AST type checking funcitons.
+"""
 
 
 def get_function_name_strings(obj):
@@ -175,7 +235,7 @@ class CFGEdge(object):
             # we will have to deal with other kinds of expressions at some point
             if type(self._instruction.targets[0]) is ast.Tuple:
                 self._operates_on = list(map(get_attr_name_string,
-                                        self._instruction.targets[0].elts) + get_function_name_strings(
+                                             self._instruction.targets[0].elts) + get_function_name_strings(
                     self._instruction.value))
             else:
                 self._operates_on = [get_attr_name_string(self._instruction.targets[0])] + \
@@ -235,7 +295,7 @@ class CFG(object):
 
         for (n, entry) in enumerate(block):
             # print("processing block")
-            if type(entry) is ast.Assign or (type(entry) is ast.Expr and type(entry.value) is ast.Call):
+            if ast_is_assign(entry) or (ast_is_expr(entry) and ast_is_call(entry.value)):
                 path_length += 1
                 # print("processing assignment")
 
@@ -261,7 +321,7 @@ class CFG(object):
                 # update current vertices
                 current_vertices = [new_vertex]
 
-            if type(entry) is ast.Pass:
+            elif ast_is_pass(entry):
                 path_length += 1
                 entry._parent_body = block
 
@@ -287,7 +347,7 @@ class CFG(object):
                 # update current vertices
                 current_vertices = [new_vertex]
 
-            elif type(entry) is ast.Return:
+            elif ast_is_return(entry):
                 path_length += 1
 
                 new_edges = []
@@ -311,7 +371,7 @@ class CFG(object):
 
                 self.return_statements.append(new_vertex)
 
-            elif type(entry) is ast.Raise:
+            elif ast_is_raise(entry):
                 path_length += 1
 
                 new_edges = []
@@ -333,7 +393,7 @@ class CFG(object):
                 # update current vertices
                 current_vertices = [new_vertex]
 
-            elif type(entry) is ast.Break:
+            elif ast_is_break(entry):
                 # we assume that we're inside a loop
                 # this instruction doesn't generate a vertex - rather it generates an edge
                 # leading to the ending vertex given by closest_loop
@@ -353,7 +413,7 @@ class CFG(object):
                 # from the preceding statement
                 current_vertices = []
 
-            elif type(entry) is ast.Continue:
+            elif ast_is_continue(entry):
                 # we assume that we're inside a loop
                 # this instruction generates a continue vertex
                 # which is picked up by the post-loop processing so an edge can be added from this vertex
@@ -382,7 +442,7 @@ class CFG(object):
                 # continue ends control-flow on this branch, so we can return to processing the block above
                 return []
 
-            elif type(entry) is ast.If:
+            elif ast_is_if(entry):
 
                 entry._parent_body = block
                 path_length += 1
@@ -444,7 +504,7 @@ class CFG(object):
                             )
 
                         else:
-                            #pairs.append((current_condition_set, current_conditional))
+                            # pairs.append((current_condition_set, current_conditional))
                             final_vertices = self.process_block(
                                 current_conditional,
                                 current_vertices,
@@ -521,7 +581,7 @@ class CFG(object):
                 # reset path length for instructions after conditional
                 path_length = 0
 
-            elif type(entry) is ast.Try:
+            elif ast_is_try(entry):
                 entry._parent_body = block
                 path_length += 1
                 # print("processing try-except")
@@ -614,7 +674,7 @@ class CFG(object):
                 condition.append("skip-try-catch")
                 path_length = 0
 
-            elif type(entry) is ast.For:
+            elif ast_is_for(entry):
                 entry._parent_body = block
                 path_length += 1
 
@@ -692,7 +752,7 @@ class CFG(object):
                 # reset path length for instructions after loop
                 path_length = 0
 
-            elif type(entry) is ast.While:
+            elif ast_is_while(entry):
                 # needs work - but while loops haven't been a thing we've needed to handle so far
                 # need to add code to deal with branching vertices
                 path_length += 1
@@ -743,7 +803,8 @@ class CFG(object):
                         final_map[vertex] = [[vertex.edges[0]]]
                     elif any(map(lambda edge: edge._target_state._name_changed == ["post-loop"], vertex.edges)):
                         # we have to deal with some branching
-                        reloop_edge = list(filter(lambda edge: edge._target_state._name_changed == ["loop"], vertex.edges))[0]
+                        reloop_edge = \
+                            list(filter(lambda edge: edge._target_state._name_changed == ["loop"], vertex.edges))[0]
                         loop_skip_edge = \
                             list(filter(lambda edge: edge._target_state._name_changed != ["loop"], vertex.edges))[0]
                         final_map[vertex] = [[reloop_edge, reloop_edge._target_state], [loop_skip_edge]]
@@ -782,10 +843,12 @@ class CFG(object):
             elif vertex._name_changed == ["loop"]:
 
                 # find the loop-skip edge
-                loop_skip_edge = list(filter(lambda edge: edge._target_state._name_changed == ["post-loop"], vertex.edges))[0]
+                loop_skip_edge = \
+                    list(filter(lambda edge: edge._target_state._name_changed == ["post-loop"], vertex.edges))[0]
                 final_map[vertex] = [[loop_skip_edge]]
-                loop_entry_edge = list(filter(lambda edge: edge._target_state._name_changed != ["post-loop"], vertex.edges))[
-                    0]
+                loop_entry_edge = \
+                    list(filter(lambda edge: edge._target_state._name_changed != ["post-loop"], vertex.edges))[
+                        0]
                 final_map[vertex].append([loop_entry_edge, loop_entry_edge._target_state])
 
 

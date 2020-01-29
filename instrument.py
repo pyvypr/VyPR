@@ -3,7 +3,6 @@ Module for performing instrumentation of the service based on the contents of th
 """
 
 import sys
-import importlib
 import traceback
 import ast
 import marshal
@@ -42,7 +41,7 @@ class InstrumentationLog(object):
     def __init__(self, logs_to_stdout):
         self.logs_to_stdout = logs_to_stdout
         # check for log directory - create it if it doesn't exist
-        if not(os.path.isdir("instrumentation_logs")):
+        if not (os.path.isdir("instrumentation_logs")):
             os.mkdir("instrumentation_logs")
         self.log_file_name = "instrumentation_logs/%s" \
                              % str(datetime.datetime.now()). \
@@ -64,6 +63,48 @@ class InstrumentationLog(object):
             self.handle.flush()
             if self.logs_to_stdout:
                 print(message)
+
+
+"""
+Bytecode writing functions - these depend on the Python version.
+"""
+
+
+def compile_bytecode_and_write(asts, file_name_without_extension):
+    """Compile ASTs to bytecode then write to file.  The method we use depends on the Python version."""
+    backup_file_name = "%s.py.inst" % file_name_without_extension
+
+    instrumented_code = compile(asts, backup_file_name, "exec")
+
+    # append an underscore to indicate that it's instrumented - removed for now
+    instrumented_file_name = "%s%s" % (file_name_without_extension, BYTECODE_EXTENSION)
+
+    logger.log("Writing instrumented bytecode to %s." % instrumented_file_name)
+
+    import struct
+
+    with open(instrumented_file_name, "wb") as h:
+        if sys.version_info[0] < 3:
+            import py_compile
+            import time
+            h.write(py_compile.MAGIC)
+            py_compile.wr_long(h, long(time.time()))
+        else:
+            import importlib
+            mtime = int(os.stat("%s.py" % file_name_without_extension).st_mtime)
+            preamble = struct.pack('<4sll', importlib.util.MAGIC_NUMBER, len(instrumented_code.co_code), mtime)
+            h.write(preamble)
+        # the write operation is the same regardless of Python version
+        marshal.dump(instrumented_code, h)
+
+    # rename the original file so it doesn't overwrite bytecode at runtime with recompilation
+    logger.log("Renaming original file to .py.inst suffix")
+    os.rename("%s.py" % file_name_without_extension, "%s.py.inst" % file_name_without_extension)
+
+
+"""
+End of bytecode writing functions.
+"""
 
 
 def scfg_to_tree(root):
@@ -126,7 +167,7 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
                             qd.append(vertex)
                             print("adding loop vertex to static binding")
                         elif (type(vertex._structure_obj.target) is ast.Tuple and
-                              variable_changed in list(map(lambda item : item.id, vertex._structure_obj.target))):
+                              variable_changed in list(map(lambda item: item.id, vertex._structure_obj.target))):
                             # the loop variable we're looking for was found inside a tuple
                             qd.append(vertex)
             else:
@@ -782,10 +823,10 @@ if __name__ == "__main__":
     VYPR_MODULE = inst_configuration.get("vypr_module") \
         if inst_configuration.get("vypr_module") else ""
     VERIFICATION_INSTRUCTION = "vypr.send_event"
-    #VERIFICATION_INSTRUCTION = "print"
+    # VERIFICATION_INSTRUCTION = "print"
 
     # first, check that the verdict server is reachable
-    if not(is_verdict_server_reachable()):
+    if not (is_verdict_server_reachable()):
         print("Verdict server is not reachable.  Ending instrumentation - nothing has been done.")
         exit()
 
@@ -1149,11 +1190,11 @@ if __name__ == "__main__":
 
                                 instrumentation_point_dictionary = {
                                     "binding": binding_db_id,
-                                    #"serialised_condition_sequence": list(
+                                    # "serialised_condition_sequence": list(
                                     #    map(pickle.dumps, point._previous_edge._condition
                                     #    if type(point) is CFGVertex else point._condition)
-                                    #),
-                                    "serialised_condition_sequence" : "",
+                                    # ),
+                                    "serialised_condition_sequence": "",
                                     "reaching_path_length": reaching_path_length,
                                     "atom": atom_index_to_db_index[atom_index]
                                 }
@@ -1349,9 +1390,9 @@ if __name__ == "__main__":
                                     function.replace(".", "-")))
 
                 # check for existence of directories for intermediate data and create them if not found
-                if not(os.path.isdir("binding_spaces")):
+                if not (os.path.isdir("binding_spaces")):
                     os.mkdir("binding_spaces")
-                if not(os.path.isdir("index_hash")):
+                if not (os.path.isdir("index_hash")):
                     os.mkdir("index_hash")
 
                 # pickle binding space
@@ -1378,26 +1419,7 @@ if __name__ == "__main__":
                 logger.log("Placing path recording instruments.")
                 place_path_recording_instruments(scfg)
 
-        backup_file_name = "%s.py.inst" % file_name_without_extension
-
-        instrumented_code = compile(asts, backup_file_name, "exec")
-
-        # append an underscore to indicate that it's instrumented - removed for now
-        instrumented_file_name = "%s%s" % (file_name_without_extension, BYTECODE_EXTENSION)
-
-        logger.log("Writing instrumented bytecode to %s." % instrumented_file_name)
-
-        import struct
-
-        with open(instrumented_file_name, "wb") as h:
-            mtime = int(os.stat("%s.py" % file_name_without_extension).st_mtime)
-            preamble = struct.pack('<4sll', importlib.util.MAGIC_NUMBER, len(instrumented_code.co_code), mtime)
-            h.write(preamble)
-            marshal.dump(instrumented_code, h)
-
-        # rename the original file so it doesn't overwrite bytecode at runtime with recompilation
-        logger.log("Renaming original file to .py.inst suffix")
-        os.rename("%s.py" % file_name_without_extension, "%s.py.inst" % file_name_without_extension)
+        compile_bytecode_and_write(asts, file_name_without_extension)
 
     logger.log("Instrumentation complete.  If VyPR is imported and activated, monitoring will now work.")
 
