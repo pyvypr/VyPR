@@ -8,7 +8,11 @@ import pickle
 import threading
 import traceback
 
-from queue import Queue
+# this differs between versions...
+try:
+    from queue import Queue
+except:
+    import Queue
 import requests
 from VyPR.SCFG.construction import CFGEdge, CFGVertex
 from VyPR.QueryBuilding import *
