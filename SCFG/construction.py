@@ -20,12 +20,12 @@ from VyPR.QueryBuilding import *
 vertices = []
 
 """
-AST decision functions - this allows us to support Python 2 and 3 at the same time.
+AST decision functions.
 """
 
 
 def ast_is_try(ast_obj):
-    return type(ast_obj) is ast.Try
+    return type(ast_obj) is ast.TryExcept
 
 
 def ast_is_assign(ast_obj):

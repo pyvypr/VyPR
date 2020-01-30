@@ -14,6 +14,8 @@ import os
 import json
 import base64
 import datetime
+import py_compile
+import time
 
 # for now, we remove the final occurrence of VyPR from the first path to look in for modules
 rindex = sys.path[0].rfind("/VyPR")
@@ -84,16 +86,8 @@ def compile_bytecode_and_write(asts, file_name_without_extension):
     import struct
 
     with open(instrumented_file_name, "wb") as h:
-        if sys.version_info[0] < 3:
-            import py_compile
-            import time
-            h.write(py_compile.MAGIC)
-            py_compile.wr_long(h, long(time.time()))
-        else:
-            import importlib
-            mtime = int(os.stat("%s.py" % file_name_without_extension).st_mtime)
-            preamble = struct.pack('<4sll', importlib.util.MAGIC_NUMBER, len(instrumented_code.co_code), mtime)
-            h.write(preamble)
+        h.write(py_compile.MAGIC)
+        py_compile.wr_long(h, long(time.time()))
         # the write operation is the same regardless of Python version
         marshal.dump(instrumented_code, h)
 
