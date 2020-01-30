@@ -5,3 +5,6 @@ In applying this licence, CERN does not waive the privileges and immunities gran
 
 Author: Joshua Dawes - CERN, University of Manchester - joshua.dawes@cern.ch
 """
+
+# we import things here so any code using VyPR can write 'import VyPR; vypr = VyPR.Monitor();'
+from .init_verification import Verification as Monitor

@@ -1,7 +1,3 @@
-from __future__ import print_function
-
-"""def print(*s):
-    pass"""
 """
 (C) Copyright 2018 CERN and University of Manchester.
 This software is distributed under the terms of the GNU General Public Licence version 3 (GPL Version 3), copied verbatim in the file "COPYING".
@@ -50,7 +46,6 @@ def apply_arithmetic_stack(stack, observation):
     Given a list of lambda functions, iteratively apply them to the observation
     to yield a final value.
     """
-    print("Observed value before arithmetic stack is %i" % observation)
     current_value = observation
     for f in stack:
         if f.__class__.__name__ == ArithmeticMultiply.__name__:
@@ -61,7 +56,6 @@ def apply_arithmetic_stack(stack, observation):
             current_value /= f._v
         elif f.__class__.__name__ == ArithmeticSubtract.__name__:
             current_value -= f._v
-    print("Observed value after arithmetic stack is %i" % current_value)
     return current_value
 
 
@@ -102,6 +96,9 @@ class StateValueInInterval(Atom):
                     and self._interval == other_atom._interval)
         else:
             return False
+
+    def __hash__(self):
+        return id(self)
 
     def check(self, value):
         """
@@ -436,10 +433,10 @@ class TimeBetweenInOpenInterval(Atom):
         self.verdict = None
 
     def __repr__(self):
-        return "timeBetween(%s, %s) in %i" % (self._lhs, self._rhs, self._interval)
+        return "timeBetween(%s, %s) in %s" % (self._lhs, self._rhs, str(self._interval))
 
     def __eq__(self, other_atom):
-        if type(other_atom) is TimeBetweenInInterval:
+        if type(other_atom) is TimeBetweenInOpenInterval:
             return (self._lhs == other_atom._lhs and
                     self._rhs == other_atom._rhs and
                     self._interval == other_atom._interval)
@@ -453,9 +450,9 @@ class TimeBetweenInOpenInterval(Atom):
             return None
         else:
             # measure the time difference and check for containment in the interval
-            return self._interval[0] < (
-                    cummulative_state[1][0]["time"] - cummulative_state[0][0]["time"]).total_seconds() < \
-                   self._interval[1]
+            duration = (cummulative_state[1][0]["time"] - cummulative_state[0][0]["time"]).total_seconds()
+            result = self._interval[0] < duration < self._interval[1]
+            return result
 
 
 """
@@ -570,6 +567,9 @@ class LogicalNot(object):
         else:
             return False
 
+    def __hash__(self):
+        return id(self)
+
     def contains_formula(self, formula):
         """
         Given a formula, check whether it is contained within this formula.
@@ -679,8 +679,9 @@ class CheckerState(object):
     def __init__(self, atoms):
         # initial state is None or "unobserved" for every atom
         self._state = {}
-        for atom in atoms:
-            self._state[atom] = None
+        self._atoms = atoms
+        for (n, atom) in enumerate(atoms):
+            self._state[n] = None
 
     def set_state(self, symbol):
         """
@@ -688,48 +689,31 @@ class CheckerState(object):
         and set its negative to false
         """
         if not (symbol in self._state.keys()):
-            self._state[symbol] = None
-        if not (lnot(symbol) in self._state.keys()):
-            self._state[lnot(symbol)] = None
-        positive_key_index = self._state.keys().index(symbol)
-        negative_key_index = self._state.keys().index(lnot(symbol))
-        positive_key = self._state.keys()[positive_key_index]
-        negative_key = self._state.keys()[negative_key_index]
+            atom_index = self._atoms.index(symbol)
 
         if formula_is_derived_from_atom(symbol):
-            self._state[positive_key] = True
-            self._state[negative_key] = False
+            self._state[atom_index] = True
         elif type(symbol) is LogicalNot and formula_is_derived_from_atom(symbol.operand):
-            self._state[positive_key] = False
-            self._state[negative_key] = True
+            self._state[atom_index] = False
 
     def __repr__(self):
         return str(self._state)
 
     def __eq__(self, other):
-        print("CHECKING EQUALITY OF MONITOR STATES")
         if type(other) is CheckerState:
             other = other._state
         else:
             return False
 
-        print(self._state)
-        print(other)
-
         keys = self._state.keys()
         for key in keys:
-            print("CHECKING KEY %s" % key)
             if not (key in other.keys()):
-                print("key %s not in other %s" % (key, other))
                 return False
             else:
-                key_index = other.keys().index(key)
-                value_in_other = other[other.keys()[key_index]]
+                key_index = list(other.keys()).index(key)
+                value_in_other = other[list(other.keys())[key_index]]
                 if value_in_other != self._state[key]:
-                    print("%s : %s != %s" % (key, value_in_other, self._state[key]))
                     return False
-                else:
-                    print("%s : %s = %s" % (key, value_in_other, self._state[key]))
 
         # nothing has returned false, so return true
         return True
@@ -737,7 +721,11 @@ class CheckerState(object):
 
 class Checker(object):
 
-    def __init__(self, formula, optimised=True):
+    def __init__(self, formula, optimised=False):
+        """
+        For now in Python 3 we use a non-optimised monitor
+        because the optimisations for realistic monitors don't do much.
+        """
         self._formula = formula
         self._original_formula = str(formula)
         self.observed_atoms = []
@@ -749,18 +737,9 @@ class Checker(object):
         self.atom_to_state_dict = {}
         self.collapsing_atom = None
         self.collapsing_atom_sub_index = None
+        self.sub_formulas = []
         # we use a tuple to record the instantiation time for each encountered bind variable
         self._monitor_instantiation_time = (datetime.datetime.now(),)
-
-        if self._optimised:
-            self.construct_atom_formula_occurrence_map(self._formula)
-            print("=" * 100)
-            print("INSTANTIATING OPTIMISED MONITOR")
-            print("=" * 100)
-        else:
-            print("=" * 100)
-            print("INSTANTIATING NON-OPTIMISED MONITOR")
-            print("=" * 100)
 
         # we now build a map from atoms in the formula to the value that the formula has for them
         # initially every atom has no observed value
@@ -815,13 +794,18 @@ class Checker(object):
                     else:
                         self.atom_to_occurrence_map[formula.operands[n]] = [formula]
                 else:
-                    print("formula %s has parent %s" % (formula.operands[n], formula.operands[n].parent_formula))
                     self.construct_atom_formula_occurrence_map(formula.operands[n])
         elif formula_is_atom(formula):
-            if self.atom_to_occurrence_map.get(formula):
-                self.atom_to_occurrence_map[formula].append(formula)
+            if not(formula in self.sub_formulas):
+              self.sub_formulas.append(formula)
+              formula_index_in_sub_formulas = len(self.sub_formulas)-1
             else:
-                self.atom_to_occurrence_map[formula] = [formula]
+              formula_index_in_sub_formulas = self.sub_formulas.index(formula)
+
+            if formula in self.atom_to_occurrence_map.keys():
+                self.atom_to_occurrence_map[formula_index_in_sub_formulas].append(formula)
+            else:
+                self.atom_to_occurrence_map[formula_index_in_sub_formulas] = [formula]
 
     def __repr__(self):
         return "Monitor for formula %s:\n  timestamps: %s\n state: %s\n  verdict: %s" % (
@@ -834,25 +818,21 @@ class Checker(object):
         """
         check_value = atom.check(value)
         if check_value == True:
-            print("atom %s gave True" % atom)
-            result = self.check_optimised(atom)
+            result = self.check(self._formula, atom)
         elif check_value == False:
-            print("atom %s gave False" % atom)
-            result = self.check_optimised(lnot(atom))
+            result = self.check(self._formula, lnot(atom))
         elif check_value == None:
             # mixed atoms can still be unconclusive if only part of them has been given an observation
             # in this case, the atom maintains state so no changes are required to the formula tree
-            print("mixed atom %s is inconclusive" % atom)
             result = None
         return result
 
-    def process_atom_and_value(self, atom, value, atom_index, atom_sub_index,
+    def process_atom_and_value(self, atom, observation_time, observation_end_time, value, atom_index, atom_sub_index,
                                force_monitor_update=False, inst_point_id=None,
                                program_path=None, state_dict=None):
         """
         Given an atom and a value, update this monitor.
         """
-        print("processing observation with program path %s" % program_path)
         # record the observation, path and state
         # we have to use lists to be able to capture  multiple observations required for mixed atoms
         if not (self.atom_to_observation.get(atom_index)):
@@ -861,19 +841,17 @@ class Checker(object):
             self.atom_to_state_dict[atom_index] = {}
 
         if not (self.atom_to_observation[atom_index].get(atom_sub_index)):
-            self.atom_to_observation[atom_index][atom_sub_index] = (value, inst_point_id)
+            self.atom_to_observation[atom_index][atom_sub_index] =\
+                (value, inst_point_id, observation_time, observation_end_time)
             # self.atom_to_program_path[atom_index][atom_sub_index] = [v for v in program_path]
             # we deal with integer indices now, so no need to copy a list
             self.atom_to_program_path[atom_index][atom_sub_index] = program_path
             self.atom_to_state_dict[atom_index][atom_sub_index] = state_dict
         else:
             # the observation has already been processed - no need to do anything
-            print("value already observed - nothing to do")
             return
 
         initial_verdict = self._formula.verdict
-
-        print("PROCESSING ATOM %s" % atom)
 
         result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
 
@@ -907,52 +885,35 @@ class Checker(object):
         # update state for the monitoring algorithm to use
         self._state.set_state(symbol)
 
-        print("checking symbol %s" % symbol)
-        print("against map %s" % self.atom_to_occurrence_map)
-        if symbol in self.atom_to_occurrence_map.keys():
-            positive_key_index = self.atom_to_occurrence_map.keys().index(symbol)
-            positive_key = self.atom_to_occurrence_map.keys()[positive_key_index]
-            positives = self.atom_to_occurrence_map.get(positive_key)
+        # temporary fix for Python 3 - the long term solution needs to be more robust
+        index_of_symbol_in_sub_formulas = self.sub_formulas.index(symbol)
+        if index_of_symbol_in_sub_formulas in self.atom_to_occurrence_map.keys():
+            positives = self.atom_to_occurrence_map.get(index_of_symbol_in_sub_formulas)
         else:
             positives = []
 
-        if lnot(symbol) in self.atom_to_occurrence_map.keys():
-            negative_key_index = self.atom_to_occurrence_map.keys().index(lnot(symbol))
-            negative_key = self.atom_to_occurrence_map.keys()[negative_key_index]
-            negatives = self.atom_to_occurrence_map.get(negative_key)
-        else:
-            negatives = []
+        negatives = []
 
         all_occurences = positives + negatives
 
-        print("Occurrences for symbol %s are %s" % (symbol, all_occurences))
-
         for occurrence in all_occurences:
-            print("Processing occurrence %s" % occurrence)
             # find the position of the atom in the subformula
             index_in_formula = 0
             # if the formula to which this atom belongs is an atom,
             # this can only happen when a formula consists of only an atom
             if formula_is_atom(occurrence):
-                print("occurrence %s is an atom" % occurrence)
                 if formula_is_derived_from_atom(symbol):
-                    print("Symbol %s is positive" % symbol)
                     if formula_is_derived_from_atom(occurrence):
-                        print("Occurrence contains positive symbol - replacing with T")
                         self._formula.verdict = True
                         return True
                     else:
-                        print("Occurrence contains negative symbol - replacing with F")
                         self._formula.verdict = False
                         return False
                 else:
-                    print("Symbol %s is negative" % symbol)
                     if formula_is_derived_from_atom(occurrence):
-                        print("Occurrence contains positive symbol - replacing with F")
                         self._formula.verdict = False
                         return False
                     else:
-                        print("Occurrence contains negative symbol - replacing with T")
                         self._formula.verdict = True
                         return True
             else:
@@ -960,49 +921,33 @@ class Checker(object):
                     if occurrence.operands[n] in [symbol, lnot(symbol)]:
                         index_in_formula = n
 
-                print("Symbol is at index %d in parent" % index_in_formula)
                 # replace the atom we've observed accordingly
                 if formula_is_derived_from_atom(symbol):
-                    print("Symbol %s is positive" % symbol)
                     if formula_is_derived_from_atom(occurrence.operands[index_in_formula]):
-                        print("Occurrence contains positive symbol - replacing with T")
                         occurrence.operands[index_in_formula] = 'T'
                     else:
-                        print("Occurrence contains negative symbol - replacing with F")
                         occurrence.operands[index_in_formula] = 'F'
                 else:
-                    print("Symbol %s is negative" % symbol)
                     if formula_is_derived_from_atom(occurrence.operands[index_in_formula]):
-                        print("Occurrence contains positive symbol - replacing with F")
                         occurrence.operands[index_in_formula] = 'F'
                     else:
-                        print("Occurrence contains negative symbol - replacing with T")
                         occurrence.operands[index_in_formula] = 'T'
-
-                print("Top level formula is now %s" % self._formula)
-                print("Traversing upwards to collapse subtrees")
 
                 # iterate up through the tree, collapsing sub-formulas to truth values as far as we can
                 current_formula = occurrence
                 current_collapsed_value = collapsed_formula(current_formula)
                 # iterate while the current formula is collapsible to a truth value
                 while not (current_collapsed_value is None):
-                    print("Processing %s with collapsed value %s and parent %s" % (
-                        current_formula, current_collapsed_value, current_formula.parent_formula))
                     if not (current_formula.parent_formula is None):
                         current_formula.parent_formula.operands[
                             current_formula.index_in_parent] = current_collapsed_value
                         current_formula = current_formula.parent_formula
                         current_collapsed_value = collapsed_formula(current_formula)
-                        print("Collapsed formula is %s" % current_formula)
                     else:
                         # we have collapsed the root to a truth value
-                        print("Collapsed to root, %s" % current_collapsed_value)
                         truth_value_to_boolean = {'T': True, 'F': False, '?': None}
                         self._formula.verdict = truth_value_to_boolean[current_collapsed_value]
                         return self._formula.verdict
-
-                print("After collapse, formula is %s" % self._formula)
 
         return None
 
@@ -1022,7 +967,6 @@ class Checker(object):
         """
 
         if not (self._formula.verdict is None):
-            print("a verdict has been arrived at - no observations can change it")
             return self._formula.verdict
 
         self.observed_atoms.append(symbol)
@@ -1031,85 +975,103 @@ class Checker(object):
 
         indent = "    " * level
 
-        print(indent + "checking formula %s" % formula)
-
         if type(formula) is LogicalAnd or type(formula) is LogicalOr:
             # first check if the disjunction or conjunction can be immediately
             # collapsed to a truth value
             if type(formula) is LogicalAnd:
                 if 'F' in formula.operands:
+                    if level == 0:
+                        self._formula.verdict = False
                     return False
             elif type(formula) is LogicalOr:
                 if 'T' in formula.operands:
+                    if level == 0:
+                        self._formula.verdict = True
                     return True
 
             if len(set(formula.operands)) == 1:
                 if formula.operands[0] == 'T':
+                    if level == 0:
+                        self._formula.verdict = True
                     return True
                 elif formula.operands[0] == 'F':
+                    if level == 0:
+                        self._formula.verdict = False
                     return False
 
             # if not, iterate through the operands
             for n in range(len(formula.operands)):
-                print(indent + "processing operand %s of %s" % (formula.operands[n], formula))
                 if not (formula.operands[n] in ['T', 'F']):
                     if formula_is_atom(formula.operands[n]):
-                        print(indent + "operand %s is atomic" % formula.operands[n])
                         if ((formula_is_derived_from_atom(formula.operands[n]) and formula_is_derived_from_atom(
                                 symbol) and formula.operands[n] == symbol)
                                 or (type(formula.operands[n]) is LogicalNot and type(symbol) is LogicalNot and
                                     formula.operands[n] == symbol)):
-                            print(indent + "setting %s to T" % formula.operands[n])
                             formula.operands[n] = 'T'
                             if type(formula) is LogicalOr:
-                                print(indent + "true atom in disjunction %s - setting disjunction to true" % formula)
                                 formula = 'T'
+                                if level == 0:
+                                    self._formula.verdict = True
                                 return True
                             elif type(formula) is LogicalAnd:
                                 formula.true_clauses += 1
                                 if formula.true_clauses == len(formula.operands):
                                     formula = 'T'
-                                    print(indent + "all clauses of conjunction true")
+                                    if level == 0:
+                                        self._formula.verdict = True
                                     return True
                         elif ((formula_is_derived_from_atom(formula.operands[n]) and type(symbol) is LogicalNot and
                                formula.operands[n] == symbol.operand)
                               or (type(formula.operands[n]) is LogicalNot and formula.operands[n].operand == symbol)):
-                            print("setting %s to F" % formula.operands[n])
                             formula.operands[n] = 'F'
                             if type(formula) is LogicalAnd:
-                                print(indent + "false atom in conjunction %s - setting conjunction to false" % formula)
                                 formula = 'F'
+                                if level == 0:
+                                    self._formula.verdict = False
                                 return False
                     else:
                         sub_verdict = self.check(formula.operands[n], symbol, level + 1)
                         if sub_verdict:
-                            print(indent + "collapsing %s to T" % formula.operands[n])
                             formula.operands[n] = 'T'
                             if type(formula) is LogicalOr:
-                                print("adsf")
-                                print(indent + "true atom in disjunction %s - setting disjunction to true" % formula)
                                 formula = 'T'
+                                if level == 0:
+                                    self._formula.verdict = True
                                 return True
                             elif type(formula) is LogicalAnd:
                                 formula.true_clauses += 1
                                 if formula.true_clauses == len(formula.operands):
                                     formula = 'T'
-                                    print(indent + "all clauses of conjunction true")
+                                    if level == 0:
+                                        self._formula.verdict = True
                                     return True
                         elif sub_verdict == False:  # explicitly not including None
                             formula.operands[n] = 'F'
                             if type(formula) is LogicalAnd:
-                                print(indent + "false atom in conjunction %s - setting conjunction to false" % formula)
                                 formula = 'F'
+                                if level == 0:
+                                    self._formula.verdict = False
                                 return False
             return sub_verdict
         elif type(formula) is LogicalNot:
             if formula_is_derived_from_atom(formula.operand) and formula.operand == symbol:
+                if level == 0:
+                    self._formula.verdict = False
                 return False
             elif type(formula.operand) is LogicalNot and formula.operand.operand == symbol:
+                if level == 0:
+                    self._formula.verdict = True
                 return True
+        elif formula_is_derived_from_atom(formula):
+            if formula == symbol:
+                if level == 0:
+                    self._formula.verdict = True
+                return True
+            else:
+                if level == 0:
+                    self._formula.verdict = False
+                return False
 
 
-def new_monitor(formula, optimised=True):
-    print(formula)
+def new_monitor(formula, optimised=False):
     return Checker(formula, optimised)

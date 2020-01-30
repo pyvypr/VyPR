@@ -1,7 +1,3 @@
-from __future__ import print_function
-
-"""def print(*s):
-    pass"""
 """
 (C) Copyright 2018 CERN and University of Manchester.
 This software is distributed under the terms of the GNU General Public Licence version 3 (GPL Version 3), copied verbatim in the file "COPYING".
@@ -62,8 +58,11 @@ class Forall(object):
         check that, if is_first is true, the bind variable is independent.
         """
 
-        bind_variable_name = bind_variable.keys()[0]
-        bind_variable_obj = bind_variable.values()[0]
+        # note: this is a quick fix, but needs to be modified
+        # since dictionaries don't guarantee order
+        bind_variable_name = list(bind_variable.keys())[0]
+        #bind_variable_obj = bind_variable.values()[0]
+        bind_variable_obj = bind_variable[bind_variable_name]
 
         self.bind_variables = bind_variables
 
@@ -134,10 +133,10 @@ class Forall(object):
         """
         # use the arguments of the lambda function
         argument_names = inspect.getargspec(self._formula).args
-        bind_variables = map(
+        bind_variables = list(map(
             lambda arg_name: self.bind_variables[arg_name],
             argument_names
-        )
+        ))
         if first_time:
             # enable "_arithmetic_build" flag in bind variables
             # so arithmetic operations are added
@@ -224,7 +223,7 @@ def requires_state_or_transition(obj):
     is a primitive type that we don't need to observe anything for,
     or derived from a state or transition
     """
-    return type(obj) in [StateValue, StaticStateLength]
+    return type(obj) in [StateValue, StateValueLength]
 
 
 class StaticState(object):
@@ -362,7 +361,6 @@ class StateValue(object):
         later when values are checked.
         """
         if self._state._arithmetic_build:
-            print("EVALUATING MULTIPLICATION OF STATE VALUE")
             self._state._arithmetic_stack.append(formula_tree.ArithmeticMultiply(value))
         return self
 
@@ -413,7 +411,6 @@ class StateValueLength(object):
         later when values are checked.
         """
         if self._state._arithmetic_build:
-            print("EVALUATING MULTIPLICATION OF STATE VALUE")
             self._state._arithmetic_stack.append(formula_tree.ArithmeticMultiply(value))
         return self
 
@@ -636,13 +633,10 @@ def derive_composition_sequence(atom):
     Given an atom, derive the sequence of operator compositions.
     """
 
-    print("deriving composition sequence for atom %s" % atom)
-
     # if the atom has an LHS and an RHS, there must be two composition sequences
 
     sequence = [atom]
     if type(atom) == formula_tree.LogicalNot:
-        print("detected negation - removing")
         current_operator = atom.operand
     else:
         current_operator = atom
@@ -657,18 +651,13 @@ def derive_composition_sequence(atom):
         # atom is mixed - two composition sequences
 
         lhs = atom._lhs
-        print(lhs)
         rhs = atom._rhs
-        print(rhs)
 
         lhs_sequence = [atom]
         rhs_sequence = [atom]
 
         comp_sequence_lhs = composition_sequence_from_value(lhs_sequence, lhs)
         comp_sequence_rhs = composition_sequence_from_value(rhs_sequence, rhs)
-
-        print("final composition sequence for lhs is %s" % str(comp_sequence_lhs))
-        print("final composition sequence for rhs is %s" % str(comp_sequence_rhs))
 
         return {"lhs": comp_sequence_lhs, "rhs": comp_sequence_rhs}
 
@@ -688,8 +677,6 @@ def derive_composition_sequence(atom):
             current_operator = current_operator._state
 
         sequence = composition_sequence_from_value(sequence, current_operator)
-
-        print("final composition sequence is %s" % str(sequence))
 
         return sequence
 
