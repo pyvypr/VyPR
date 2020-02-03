@@ -537,6 +537,30 @@ class Verification(object):
         VYPR_OUTPUT_VERBOSE = inst_configuration.get("verbose") if inst_configuration.get("verbose") else True
         PROJECT_ROOT = inst_configuration.get("project_root") if inst_configuration.get("project_root") else ""
 
+        # check if there's an NTP server given that we should use for time
+        self.ntp_server = inst_configuration.get("ntp_server")
+        if self.ntp_server:
+            print("Setting time based on NTP server '%s'." % self.ntp_server)
+            # set two timestamps - the local time, and the ntp server time, from the same instant
+            import ntplib
+            client = ntplib.NTPClient()
+            try:
+                response = client.request(self.ntp_server)
+                # set the local start time
+                self.local_start_time = datetime.datetime.utcfromtimestamp(response.orig_time)
+                # compute the delay due to network latency to reach the ntp server
+                adjustment = (response.dest_time - response.orig_time) / 2
+                # set the ntp start time by subtracting the adjustment from the time given by the ntp server
+                # this works because 'adjustment' is approximately the time elapsed
+                # between the first time we measure local time and when the ntp server measures its own time
+                # so by subtracting this difference we adjust the ntp server time to the same instant
+                # as the local time
+                self.ntp_start_time = datetime.datetime.utcfromtimestamp(response.tx_time - adjustment)
+            except:
+                vypr_output("Couldn't set time based on NTP server '%s'." % self.ntp_server)
+                print("Couldn't set time based on NTP server '%s'." % self.ntp_server)
+                exit()
+
         if flask_object:
             def prepare_vypr():
                 import datetime
@@ -617,6 +641,25 @@ class Verification(object):
         self.consumption_thread.start()
 
         vypr_output("VyPR monitoring initialisation finished.")
+
+    def get_time(self):
+        """
+        Returns either the machine local time, or the NTP time (using the initial NTP time
+        obtained when VyPR started up, so we don't query an NTP server everytime we want to measure time).
+        The result is in UTC.
+        :return: datetime.datetime object
+        """
+        if self.ntp_server:
+            vypr_output("Getting time based on NTP.")
+            current_local_time = datetime.datetime.utcnow()
+            # compute the time elapsed since the start
+            difference = current_local_time - self.local_start_time
+            # add that time to the ntp time obtained at the start
+            current_ntp_time = self.ntp_start_time + difference
+            return current_ntp_time
+        else:
+            vypr_output("Getting time based on local machine.")
+            return datetime.datetime.utcnow()
 
     def send_event(self, event_description):
         if not (self.initialisation_failure):

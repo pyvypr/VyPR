@@ -46,7 +46,7 @@ class InstrumentationLog(object):
         if not (os.path.isdir("instrumentation_logs")):
             os.mkdir("instrumentation_logs")
         self.log_file_name = "instrumentation_logs/%s" \
-                             % str(datetime.datetime.now()). \
+                             % str(datetime.datetime.utcnow()). \
                                  replace(" ", "_").replace(":", "_").replace(".", "_").replace("-", "_")
         self.handle = None
 
@@ -59,7 +59,7 @@ class InstrumentationLog(object):
 
     def log(self, message):
         if self.handle:
-            message = "[VyPR instrumentation - %s] %s" % (str(datetime.datetime.now()), message)
+            message = "[VyPR instrumentation - %s] %s" % (str(datetime.datetime.utcnow()), message)
             self.handle.write("%s\n" % message)
             # flush the contents of the file to disk - this way we get a log even with an unhandled exception
             self.handle.flush()
@@ -392,7 +392,7 @@ def instrument_point_state(state, name, point, binding_space_indices,
         state_recording_instrument = "record_state_%s = type(%s).__name__; " % (state_variable_alias, name)
     elif measure_attribute == "time_attained":
         state_variable_alias = "time_attained_%i" % atom_sub_index
-        state_recording_instrument = "record_state_%s = vypr_dt.now(); " % state_variable_alias
+        state_recording_instrument = "record_state_%s = vypr.get_time(); " % state_variable_alias
         # the only purpose here is to match what is expected in the monitoring algorithm
         name = "time"
     else:
@@ -507,8 +507,8 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
     else:
         state_dict = "{}"
 
-    timer_start_statement = "__timer_s = vypr_dt.now()"
-    timer_end_statement = "__timer_e = vypr_dt.now()"
+    timer_start_statement = "__timer_s = vypr.get_time()"
+    timer_end_statement = "__timer_e = vypr.get_time()"
 
     time_difference_statement = "__duration = __timer_e - __timer_s; "
     instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," +
@@ -734,7 +734,7 @@ def place_function_begin_instruments(function_def, formula_hash, instrument_func
     # NOTE: only problem with this is that the "end" instrument is inserted before the return,
     # so a function call in the return statement maybe missed if it's part of verification...
     thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
-    vypr_start_time_instrument = "vypr_start_time = vypr_dt.now();"
+    vypr_start_time_instrument = "vypr_start_time = vypr.get_time();"
     start_instrument = \
         "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
         % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
@@ -760,7 +760,7 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
     for end_vertex in scfg.return_statements:
         end_instrument = \
             "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
-            "vypr_dt.now()))" \
+            "vypr.get_time()))" \
             % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
         end_ast = ast.parse(end_instrument).body[0]
 
@@ -777,7 +777,7 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
     # if the last instruction in the ast is not a return statement, add an end instrument at the end
     if not (type(function_def.body[-1]) is ast.Return):
         end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
-                         "vypr_dt.now()))" \
+                         "vypr.get_time()))" \
                          % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
                             formula_hash)
         end_ast = ast.parse(end_instrument).body[0]
