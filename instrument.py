@@ -387,17 +387,21 @@ def instrument_point_state(state, name, point, binding_space_indices,
     if measure_attribute == "length":
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = len(%s); " % (state_variable_alias, name)
+        time_attained_instrument = "time_attained_%s = vypr.get_time();" % state_variable_alias
     elif measure_attribute == "type":
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = type(%s).__name__; " % (state_variable_alias, name)
+        time_attained_instrument = "time_attained_%s = vypr.get_time();" % state_variable_alias
     elif measure_attribute == "time_attained":
         state_variable_alias = "time_attained_%i" % atom_sub_index
         state_recording_instrument = "record_state_%s = vypr.get_time(); " % state_variable_alias
+        time_attained_instrument = state_recording_instrument
         # the only purpose here is to match what is expected in the monitoring algorithm
         name = "time"
     else:
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
+        time_attained_instrument = "time_attained_%s = vypr.get_time();" % state_variable_alias
 
     # note that observed_value is used three times:
     # 1) to capture the time attained by the state for checking of a property - this is duplicated
@@ -405,8 +409,8 @@ def instrument_point_state(state, name, point, binding_space_indices,
     # 3) to capture the time at which an observation was received - it makes sense that these times would
     #    be the same.
     instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}, "
-                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {observed_value}, "
-                        "{observed_value}, {{ '{atom_program_variable}' : {observed_value} }}, __thread_id") \
+                        "{atom_index}, {atom_sub_index}, {instrumentation_point_db_id}, {time_attained}, "
+                        "{time_attained}, {{ '{atom_program_variable}' : {observed_value} }}, __thread_id") \
         .format(
         formula_hash=formula_hash,
         function_qualifier=instrument_function_qualifier,
@@ -415,10 +419,12 @@ def instrument_point_state(state, name, point, binding_space_indices,
         atom_sub_index=atom_sub_index,
         instrumentation_point_db_id=instrumentation_point_db_ids,
         atom_program_variable=name,
+        time_attained = ("time_attained_%s" % state_variable_alias),
         observed_value=("record_state_%s" % state_variable_alias)
     )
     state_recording_instrument += "%s((%s))" % (VERIFICATION_INSTRUCTION, instrument_tuple)
 
+    time_attained_ast = ast.parse(time_attained_instrument).body[0]
     record_state_ast = ast.parse(state_recording_instrument).body[0]
     queue_ast = ast.parse(state_recording_instrument).body[1]
 
@@ -444,9 +450,12 @@ def instrument_point_state(state, name, point, binding_space_indices,
             # a special case for trigger insertion
             parent_block.insert(index_in_block, queue_ast)
             parent_block.insert(index_in_block, record_state_ast)
+            parent_block.insert(index_in_block, time_attained_ast)
         elif type(state) is DestinationStaticState:
             parent_block.insert(index_in_block + 1, queue_ast)
             parent_block.insert(index_in_block + 1, record_state_ast)
+            parent_block.insert(index_in_block + 1, time_attained_ast)
+
     else:
 
         if point._name_changed == ["loop"]:
@@ -465,6 +474,7 @@ def instrument_point_state(state, name, point, binding_space_indices,
                     # insert instruments in reverse order
                     parent_block.insert(index_in_block + 1, queue_ast)
                     parent_block.insert(index_in_block + 1, record_state_ast)
+                    parent_block.insert(index_in_block + 1, time_attained_ast)
         else:
             # we're instrumenting a normal vertex where there is an explicit instruction
             logger.log("Not source or destination state - performing normal instrumentation.")
@@ -482,6 +492,7 @@ def instrument_point_state(state, name, point, binding_space_indices,
 
             parent_block.insert(index_in_block + 1, queue_ast)
             parent_block.insert(index_in_block + 1, record_state_ast)
+            parent_block.insert(index_in_block + 1, time_attained_ast)
 
 
 def instrument_point_transition(atom, point, binding_space_indices, atom_index,
@@ -552,7 +563,7 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
     point._instruction._parent_body.insert(index_in_block, start_ast)
 
 
-def place_path_recording_instruments(scfg):
+def place_path_recording_instruments(scfg, instrument_function_qualifier, formula_hash):
     # insert path recording instruments - these don't depend on the formula being checked so
     # this is done independent of binding space computation
     for vertex_information in scfg.branch_initial_statements:
@@ -819,6 +830,8 @@ if __name__ == "__main__":
     VERIFICATION_INSTRUCTION = "vypr.send_event"
     # VERIFICATION_INSTRUCTION = "print"
 
+    machine_id = ("%s-" % inst_configuration.get("machine_id")) if inst_configuration.get("machine_id") else ""
+
     # first, check that the verdict server is reachable
     if not (is_verdict_server_reachable()):
         print("Verdict server is not reachable.  Ending instrumentation - nothing has been done.")
@@ -897,7 +910,7 @@ if __name__ == "__main__":
 
             # we replace . with : in function definitions to make sure we can distinguish between module
             # and class navigation later on
-            instrument_function_qualifier = "%s.%s" % (module, function.replace(".", ":"))
+            instrument_function_qualifier = "%s%s.%s" % (machine_id, module, function.replace(".", ":"))
 
             index_to_hash = []
 
@@ -973,6 +986,13 @@ if __name__ == "__main__":
                 serialised_atom_list = list(
                     map(lambda item: base64.encodestring(pickle.dumps(item)).decode('ascii'), atoms)
                 )
+
+                # note that this also means giving an empty list [] will result in path instrumentation
+                # without property instrumentation
+                if EXPLANATION:
+                    logger.log("=" * 100)
+                    logger.log("Placing path recording instruments.")
+                    place_path_recording_instruments(scfg, instrument_function_qualifier, formula_hash)
 
                 # update the index -> hash map
                 index_to_hash.append(formula_hash)
@@ -1410,14 +1430,6 @@ if __name__ == "__main__":
                                           (module.replace(".", "-"), function.replace(".", "-"))
                 with open(index_to_hash_dump_file, "wb") as h:
                     h.write(pickled_index_hash)
-
-            # explanation instrumentation is performed for each function, independently of properties
-            # note that this also means giving an empty list [] will result in path instrumentation
-            # without property instrumentation
-            if EXPLANATION:
-                logger.log("=" * 100)
-                logger.log("Placing path recording instruments.")
-                place_path_recording_instruments(scfg)
 
         compile_bytecode_and_write(asts, file_name_without_extension)
 

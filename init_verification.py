@@ -537,6 +537,8 @@ class Verification(object):
         VYPR_OUTPUT_VERBOSE = inst_configuration.get("verbose") if inst_configuration.get("verbose") else True
         PROJECT_ROOT = inst_configuration.get("project_root") if inst_configuration.get("project_root") else ""
 
+        self.machine_id = ("%s-" % inst_configuration.get("machine_id")) if inst_configuration.get("machine_id") else ""
+
         # check if there's an NTP server given that we should use for time
         self.ntp_server = inst_configuration.get("ntp_server")
         if self.ntp_server:
@@ -620,7 +622,7 @@ class Verification(object):
             vypr_output("Setting up monitoring state for module/function/property triple %s, %s, %s" % (
                 module_string, function, property_hash))
 
-            module_function_string = "%s.%s" % (module_string, function)
+            module_function_string = "%s%s.%s" % (self.machine_id, module_string, function)
 
             if not (self.function_to_maps.get(module_function_string)):
                 self.function_to_maps[module_function_string] = {}
