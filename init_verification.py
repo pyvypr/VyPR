@@ -276,9 +276,6 @@ def consumption_thread_function(verification_obj):
                 # reset the function start time for the next time
                 maps.latest_time_of_call = None
 
-                # reset the program path
-                maps.program_path = []
-
             elif scope_event == "start":
                 vypr_output("Function '%s' has started." % function_name)
 
@@ -286,6 +283,9 @@ def consumption_thread_function(verification_obj):
                 maps.latest_time_of_call = top_pair[3]
 
                 vypr_output("Set start time to %s" % maps.latest_time_of_call)
+
+                # reset the program path
+                maps.program_path = []
 
                 vypr_output("*" * 50)
 
@@ -362,6 +362,8 @@ def consumption_thread_function(verification_obj):
                                         for sub_index in monitor.atom_to_state_dict[atom_index].keys():
                                             new_monitor.atom_to_state_dict[atom_index][sub_index] = \
                                                 monitor.atom_to_state_dict[atom_index][sub_index]
+
+                            vypr_output("    New monitor construction finished.")
 
                     elif len(monitor._monitor_instantiation_time) == bind_variable_index:
                         vypr_output("    Updating existing monitor timestamp sequence")
@@ -566,9 +568,10 @@ class Verification(object):
         if flask_object:
             def prepare_vypr():
                 import datetime
+                from app import vypr
                 # this function runs inside a request, so flask.g exists
                 # we store just the request time
-                flask.g.request_time = datetime.datetime.now()
+                flask.g.request_time = vypr.get_time()
 
             flask_object.before_request(prepare_vypr)
 
@@ -644,7 +647,7 @@ class Verification(object):
 
         vypr_output("VyPR monitoring initialisation finished.")
 
-    def get_time(self):
+    def get_time(self, callee=""):
         """
         Returns either the machine local time, or the NTP time (using the initial NTP time
         obtained when VyPR started up, so we don't query an NTP server everytime we want to measure time).
@@ -660,7 +663,7 @@ class Verification(object):
             current_ntp_time = self.ntp_start_time + difference
             return current_ntp_time
         else:
-            vypr_output("Getting time based on local machine.")
+            vypr_output("Getting time based on local machine - %s" % callee)
             return datetime.datetime.utcnow()
 
     def send_event(self, event_description):

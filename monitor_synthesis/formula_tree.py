@@ -120,7 +120,7 @@ class StateValueInOpenInterval(Atom):
         self.verdict = None
 
     def __repr__(self):
-        return "(%s)(%s) in %s" % (self._state, self._name, self._interval)
+        return "(%s)(%s) in %s" % (self._state, self._name, self.d_interval)
 
     def __eq__(self, other_atom):
         if type(other_atom) is StateValueInInterval:
@@ -203,7 +203,9 @@ class StateValueEqualToMixed(Atom):
     def __eq__(self, other_atom):
         if type(other_atom) is StateValueEqualToMixed:
             return (self._lhs == other_atom._lhs
-                    and self._lhs_name == self._rhs_name)
+                    and self._lhs_name == other_atom._lhs_name
+                    and self._rhs == other_atom._rhs
+                    and self._rhs_name == other_atom._rhs_name)
         else:
             return False
 
@@ -216,14 +218,59 @@ class StateValueEqualToMixed(Atom):
             return None
         else:
             lhs_with_arithmetic = apply_arithmetic_stack(
-                self._lhs.arithmetic_stack,
-                cummulative_state[0][0]
+                self._lhs._arithmetic_stack,
+                cummulative_state[0][0][self._lhs_name]
             )
             rhs_with_arithmetic = apply_arithmetic_stack(
-                self._rhs.arithmetic_stack,
-                cummulative_state[1][0]
+                self._rhs._arithmetic_stack,
+                cummulative_state[1][0][self._rhs_name]
             )
             return lhs_with_arithmetic == rhs_with_arithmetic
+
+
+class StateValueLengthLessThanStateValueLengthMixed(Atom):
+    """
+    This class models the atom (s1(x).length() < s2(y).length()).
+    """
+
+    def __init__(self, lhs, lhs_name, rhs, rhs_name):
+        self._lhs = lhs
+        self._rhs = rhs
+        self._lhs_name = lhs_name
+        self._rhs_name = rhs_name
+        self.verdict = None
+
+    def __repr__(self):
+        return "(%s)(%s).length() < (%s)(%s).length()" % (self._lhs, self._lhs_name, self._rhs, self._rhs_name)
+
+    def __eq__(self, other_atom):
+        if type(other_atom) is StateValueLengthLessThanStateValueLengthMixed:
+            return (self._lhs == other_atom._lhs
+                    and self._lhs_name == other_atom._lhs_name
+                    and self._rhs == other_atom._rhs
+                    and self._rhs_name == other_atom._rhs_name)
+        else:
+            return False
+
+    def check(self, cummulative_state):
+        """
+        If either the RHS or LHS are None, we don't try to reach a truth value.
+        But if they are both not equal to None, we check for equality.
+        """
+        if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+            return None
+        else:
+            lhs_with_arithmetic = apply_arithmetic_stack(
+                self._lhs._arithmetic_stack,
+                cummulative_state[0][0][self._lhs_name]
+            )
+            rhs_with_arithmetic = apply_arithmetic_stack(
+                self._rhs._arithmetic_stack,
+                cummulative_state[1][0][self._rhs_name]
+            )
+            print(lhs_with_arithmetic, rhs_with_arithmetic)
+            print(lhs_with_arithmetic < rhs_with_arithmetic)
+            return lhs_with_arithmetic < rhs_with_arithmetic
 
 
 class StateValueLengthInInterval(Atom):
@@ -817,6 +864,7 @@ class Checker(object):
         an indication of whether the observation is for the lhs or rhs
         """
         check_value = atom.check(value)
+        print("resulting truth value", check_value)
         if check_value == True:
             result = self.check(self._formula, atom)
         elif check_value == False:
@@ -1063,8 +1111,10 @@ class Checker(object):
                     self._formula.verdict = True
                 return True
         elif formula_is_derived_from_atom(formula):
+            print("simple formula")
             if formula == symbol:
                 if level == 0:
+                    print("reached true verdict")
                     self._formula.verdict = True
                 return True
             else:

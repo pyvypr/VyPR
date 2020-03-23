@@ -387,21 +387,25 @@ def instrument_point_state(state, name, point, binding_space_indices,
     if measure_attribute == "length":
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = len(%s); " % (state_variable_alias, name)
-        time_attained_instrument = "time_attained_%s = vypr.get_time();" % state_variable_alias
+        time_attained_instrument = "time_attained_%s = vypr.get_time('point instrument');" % state_variable_alias
+        time_attained_variable = "time_attained_%s" % state_variable_alias
     elif measure_attribute == "type":
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = type(%s).__name__; " % (state_variable_alias, name)
-        time_attained_instrument = "time_attained_%s = vypr.get_time();" % state_variable_alias
+        time_attained_instrument = "time_attained_%s = vypr.get_time('point instrument');" % state_variable_alias
+        time_attained_variable = "time_attained_%s" % state_variable_alias
     elif measure_attribute == "time_attained":
         state_variable_alias = "time_attained_%i" % atom_sub_index
-        state_recording_instrument = "record_state_%s = vypr.get_time(); " % state_variable_alias
+        state_recording_instrument = "record_state_%s = vypr.get_time('point instrument'); " % state_variable_alias
         time_attained_instrument = state_recording_instrument
+        time_attained_variable = "record_state_%s" % state_variable_alias
         # the only purpose here is to match what is expected in the monitoring algorithm
         name = "time"
     else:
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
-        time_attained_instrument = "time_attained_%s = vypr.get_time();" % state_variable_alias
+        time_attained_instrument = "time_attained_%s = vypr.get_time('point instrument');" % state_variable_alias
+        time_attained_variable = "time_attained_%s" % state_variable_alias
 
     # note that observed_value is used three times:
     # 1) to capture the time attained by the state for checking of a property - this is duplicated
@@ -419,7 +423,7 @@ def instrument_point_state(state, name, point, binding_space_indices,
         atom_sub_index=atom_sub_index,
         instrumentation_point_db_id=instrumentation_point_db_ids,
         atom_program_variable=name,
-        time_attained = ("time_attained_%s" % state_variable_alias),
+        time_attained=time_attained_variable,
         observed_value=("record_state_%s" % state_variable_alias)
     )
     state_recording_instrument += "%s((%s))" % (VERIFICATION_INSTRUCTION, instrument_tuple)
@@ -518,8 +522,8 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
     else:
         state_dict = "{}"
 
-    timer_start_statement = "__timer_s = vypr.get_time()"
-    timer_end_statement = "__timer_e = vypr.get_time()"
+    timer_start_statement = "__timer_s = vypr.get_time('transition instrument')"
+    timer_end_statement = "__timer_e = vypr.get_time('transition instrument')"
 
     time_difference_statement = "__duration = __timer_e - __timer_s; "
     instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," +
@@ -745,7 +749,7 @@ def place_function_begin_instruments(function_def, formula_hash, instrument_func
     # NOTE: only problem with this is that the "end" instrument is inserted before the return,
     # so a function call in the return statement maybe missed if it's part of verification...
     thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
-    vypr_start_time_instrument = "vypr_start_time = vypr.get_time();"
+    vypr_start_time_instrument = "vypr_start_time = vypr.get_time('begin instrument');"
     start_instrument = \
         "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
         % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
@@ -771,7 +775,7 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
     for end_vertex in scfg.return_statements:
         end_instrument = \
             "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
-            "vypr.get_time()))" \
+            "vypr.get_time('end instrument')))" \
             % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
         end_ast = ast.parse(end_instrument).body[0]
 
@@ -788,7 +792,7 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
     # if the last instruction in the ast is not a return statement, add an end instrument at the end
     if not (type(function_def.body[-1]) is ast.Return):
         end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
-                         "vypr.get_time()))" \
+                         "vypr.get_time('end instrument')))" \
                          % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
                             formula_hash)
         end_ast = ast.parse(end_instrument).body[0]
@@ -1087,6 +1091,7 @@ if __name__ == "__main__":
                         static_qd_to_point_map[m][atom_index] = {}
 
                         if type(atom) in [formula_tree.StateValueEqualToMixed,
+                                          formula_tree.StateValueLengthLessThanStateValueLengthMixed,
                                           formula_tree.TransitionDurationLessThanTransitionDurationMixed,
                                           formula_tree.TransitionDurationLessThanStateValueMixed,
                                           formula_tree.TransitionDurationLessThanStateValueLengthMixed,
@@ -1303,6 +1308,29 @@ if __name__ == "__main__":
                                     logger.log("Placing right-hand-side instrument for SCFG object %s." % atom._rhs)
                                     instrument_point_state(atom._rhs, atom._rhs_name, point, binding_space_indices,
                                                            atom_index, atom_sub_index, instrumentation_point_db_ids)
+
+                            elif type(atom) in [formula_tree.StateValueLengthLessThanStateValueLengthMixed]:
+                                """We're instrumenting multiple states, so we need to perform instrumentation on two 
+                                separate points. """
+
+                                # for each side of the atom (LHS and RHS), instrument the necessary points
+
+                                logger.log(
+                                    "instrumenting for a mixed atom %s with sub atom index %i" % (atom, atom_sub_index)
+                                )
+
+                                if atom_sub_index == 0:
+                                    # we're instrumenting for the lhs
+                                    logger.log("Placing left-hand-side instrument for SCFG object %s." % atom._lhs)
+                                    instrument_point_state(atom._lhs, atom._lhs_name, point, binding_space_indices,
+                                                           atom_index, atom_sub_index, instrumentation_point_db_ids,
+                                                           measure_attribute="length")
+                                else:
+                                    # we're instrumenting for the rhs
+                                    logger.log("Placing right-hand-side instrument for SCFG object %s." % atom._rhs)
+                                    instrument_point_state(atom._rhs, atom._rhs_name, point, binding_space_indices,
+                                                           atom_index, atom_sub_index, instrumentation_point_db_ids,
+                                                           measure_attribute="length")
 
                             elif type(atom) is formula_tree.TransitionDurationLessThanTransitionDurationMixed:
                                 """We're instrumenting multiple transitions, so we need to perform instrumentation on 

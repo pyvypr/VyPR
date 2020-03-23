@@ -278,6 +278,8 @@ class SourceStaticState(StaticState):
 
     def __init__(self, outgoing_transition):
         self._outgoing_transition = outgoing_transition
+        self._arithmetic_stack = []
+        self._arithmetic_build = False
 
     def __repr__(self):
         return "(%s).input()" % self._outgoing_transition
@@ -294,6 +296,8 @@ class DestinationStaticState(StaticState):
 
     def __init__(self, incoming_transition):
         self._incoming_transition = incoming_transition
+        self._arithmetic_stack = []
+        self._arithmetic_build = False
 
     def __repr__(self):
         return "(%s).result()" % self._incoming_transition
@@ -360,22 +364,26 @@ class StateValue(object):
         add an object to the arithmetic stack so it can be applied
         later when values are checked.
         """
-        if self._state._arithmetic_build:
+        base_variable = composition_sequence_from_value([self._state], self._state)[-1]
+        if base_variable._arithmetic_build:
             self._state._arithmetic_stack.append(formula_tree.ArithmeticMultiply(value))
         return self
 
     def __add__(self, value):
-        if self._state._arithmetic_build:
+        base_variable = composition_sequence_from_value([self._state], self._state)[-1]
+        if base_variable._arithmetic_build:
             self._state._arithmetic_stack.append(formula_tree.ArithmeticAdd(value))
         return self
 
     def __sub__(self, value):
-        if self._state._arithmetic_build:
+        base_variable = composition_sequence_from_value([self._state], self._state)[-1]
+        if base_variable._arithmetic_build:
             self._state._arithmetic_stack.append(formula_tree.ArithmeticSubtract(value))
         return self
 
     def __truediv__(self, value):
-        if self._state._arithmetic_build:
+        base_variable = composition_sequence_from_value([self._state], self._state)[-1]
+        if base_variable._arithmetic_build:
             self._state._arithmetic_stack.append(formula_tree.ArithmeticTrueDivide(value))
         return self
 
@@ -400,6 +408,25 @@ class StateValueLength(object):
         )
 
     """
+    Overload comparison operators.
+    """
+
+    def __lt__(self, value):
+        """
+        Generates an atom.
+        """
+        # TODO: extend for multiple types
+        if type(value) is StateValueLength:
+            # the RHS of the comparison requires observation of another state or transition
+            # so we use a different class to deal with this
+            return formula_tree.StateValueLengthLessThanStateValueLengthMixed(
+                self._state,
+                self._name,
+                value._state,
+                value._name
+            )
+
+    """
     Arithmetic overloading is useful for mixed atoms
     when observed quantities are being compared to each other.
     """
@@ -410,22 +437,26 @@ class StateValueLength(object):
         add an object to the arithmetic stack so it can be applied
         later when values are checked.
         """
-        if self._state._arithmetic_build:
+        base_variable = composition_sequence_from_value([self._state], self._state)[-1]
+        if base_variable._arithmetic_build:
             self._state._arithmetic_stack.append(formula_tree.ArithmeticMultiply(value))
         return self
 
     def __add__(self, value):
-        if self._state._arithmetic_build:
+        base_variable = composition_sequence_from_value([self._state], self._state)[-1]
+        if base_variable._arithmetic_build:
             self._state._arithmetic_stack.append(formula_tree.ArithmeticAdd(value))
         return self
 
     def __sub__(self, value):
-        if self._state._arithmetic_build:
+        base_variable = composition_sequence_from_value([self._state], self._state)[-1]
+        if base_variable._arithmetic_build:
             self._state._arithmetic_stack.append(formula_tree.ArithmeticSubtract(value))
         return self
 
     def __truediv__(self, value):
-        if self._state._arithmetic_build:
+        base_variable = composition_sequence_from_value([self._state], self._state)[-1]
+        if base_variable._arithmetic_build:
             self._state._arithmetic_stack.append(formula_tree.ArithmeticTrueDivide(value))
         return self
 
@@ -642,6 +673,7 @@ def derive_composition_sequence(atom):
         current_operator = atom
 
     if type(atom) in [formula_tree.StateValueEqualToMixed,
+                      formula_tree.StateValueLengthLessThanStateValueLengthMixed,
                       formula_tree.TransitionDurationLessThanTransitionDurationMixed,
                       formula_tree.TransitionDurationLessThanStateValueMixed,
                       formula_tree.TransitionDurationLessThanStateValueLengthMixed,
