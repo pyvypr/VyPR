@@ -1,0 +1,33 @@
+# Setup script for VyPR and VyPRServer
+# Kept at http://cern.ch/vypr/setup
+
+echo "Setting up VyPR..."
+echo "Assuming the working directory is the service root directory."
+
+echo "Pulling VyPR core..."
+# pull VyPR
+git clone https://github.com/pyvypr/VyPR.git
+cd VyPR
+# install requirements
+pip install -r requirements.txt
+
+# go back to the root directory
+cd ../
+
+echo "Pulling VyPR Server..."
+# pull VyPRServer
+git clone https://github.com/pyvypr/VyPRServer.git
+
+echo "Setting up server environment..."
+# set up server
+cd VyPRServer
+virtualenv venv --python=python2.7
+# install requirements
+pip install -r requirements.txt
+# set up verdict database
+touch verdicts.db
+sqlite3 verdicts.db < verdict-schema.sql
+# pull VyPR for the verdict server to use
+git clone https://github.com/pyvypr/VyPR.git
+
+echo "Setup complete.  See http://cern.ch/vypr/documentation.html for instructions on what to do next."
