@@ -438,8 +438,9 @@ def consumption_thread_function(verification_obj):
 
         vypr_output("=" * 100)
 
+    # temporarily stop closure of the logging file
     # if we reach this point, the monitoring thread is ending
-    vypr_logger.end_logging()
+    #vypr_logger.end_logging()
 
 
 class PropertyMapGroup(object):
@@ -544,6 +545,7 @@ class Verification(object):
             "verdict_server_url") else "http://localhost:9001/"
         VYPR_OUTPUT_VERBOSE = inst_configuration.get("verbose") if inst_configuration.get("verbose") else True
         PROJECT_ROOT = inst_configuration.get("project_root") if inst_configuration.get("project_root") else ""
+        VYPR_MODULE = inst_configuration.get("vypr_module") if inst_configuration.get("vypr_module") else ""
 
         self.machine_id = ("%s-" % inst_configuration.get("machine_id")) if inst_configuration.get("machine_id") else ""
 
@@ -571,38 +573,6 @@ class Verification(object):
                 print("Couldn't set time based on NTP server '%s'." % self.ntp_server)
                 exit()
 
-        if flask_object:
-            def prepare_vypr():
-                import datetime
-                from app import vypr
-                # this function runs inside a request, so flask.g exists
-                # we store just the request time
-                flask.g.request_time = vypr.get_time()
-
-            flask_object.before_request(prepare_vypr)
-
-            # add VyPR end points - we may use this for statistics collection on the server
-            # add the safe exist end point
-            @flask_object.route("/vypr/stop-monitoring/")
-            def endpoint_stop_monitoring():
-                from app import vypr
-                # send end-monitoring message
-                vypr.end_monitoring()
-                # wait for the thread to end
-                vypr.consumption_thread.join()
-                return "VyPR monitoring thread exited.  The server must be restarted to turn monitoring back on.\n"
-
-            @flask_object.route("/vypr/pause-monitoring/")
-            def endpoint_pause_monitoring():
-                from app import vypr
-                vypr.pause_monitoring()
-                return "VyPR monitoring paused - thread is still running.\n"
-
-            @flask_object.route("/vypr/resume-monitoring/")
-            def endpoint_resume_monitoring():
-                from app import vypr
-                vypr.resume_monitoring()
-                return "VyPR monitoring resumed.\n"
 
         # set up the maps that the monitoring algorithm that the consumption thread runs
 
@@ -640,16 +610,104 @@ class Verification(object):
 
         vypr_output(self.function_to_maps)
 
-        vypr_output("Setting up monitoring thread.")
+        if flask_object:
+            if VYPR_MODULE != "":
+                # if a VyPR module is given, this means VyPR will be running between requests
 
-        # setup consumption queue and store it globally across requests
-        self.consumption_queue = Queue()
-        # setup consumption thread
-        self.consumption_thread = threading.Thread(
-            target=consumption_thread_function,
-            args=[self]
-        )
-        self.consumption_thread.start()
+                def prepare_vypr():
+                    import datetime
+                    from app import vypr
+                    # this function runs inside a request, so flask.g exists
+                    # we store just the request time
+                    flask.g.request_time = vypr.get_time()
+
+                flask_object.before_request(prepare_vypr)
+
+                # add VyPR end points - we may use this for statistics collection on the server
+                # add the safe exist end point
+                @flask_object.route("/vypr/stop-monitoring/")
+                def endpoint_stop_monitoring():
+                    from app import vypr
+                    # send end-monitoring message
+                    vypr.end_monitoring()
+                    # wait for the thread to end
+                    vypr.consumption_thread.join()
+                    return "VyPR monitoring thread exited.  The server must be restarted to turn monitoring back on.\n"
+
+                @flask_object.route("/vypr/pause-monitoring/")
+                def endpoint_pause_monitoring():
+                    from app import vypr
+                    vypr.pause_monitoring()
+                    return "VyPR monitoring paused - thread is still running.\n"
+
+                @flask_object.route("/vypr/resume-monitoring/")
+                def endpoint_resume_monitoring():
+                    from app import vypr
+                    vypr.resume_monitoring()
+                    return "VyPR monitoring resumed.\n"
+
+                vypr_output("Setting up monitoring thread.")
+
+                # setup consumption queue and store it globally across requests
+                self.consumption_queue = Queue()
+                # setup consumption thread
+                self.consumption_thread = threading.Thread(
+                    target=consumption_thread_function,
+                    args=[self]
+                )
+                self.consumption_thread.start()
+
+            else:
+                # if no VyPR module is given, this means VyPR will have to run per request
+
+                def start_vypr():
+                    # setup consumption queue and store it within the request context
+                    from flask import g
+                    self.consumption_queue = Queue()
+                    # setup consumption thread
+                    self.consumption_thread = threading.Thread(
+                        target=consumption_thread_function,
+                        args=[self]
+                    )
+                    # store vypr object in request context
+                    g.vypr = self
+                    self.consumption_thread.start()
+                    g.request_time = g.vypr.get_time()
+
+                flask_object.before_request(start_vypr)
+
+                # add VyPR end points - we may use this for statistics collection on the server
+                # add the safe exist end point
+                @flask_object.route("/vypr/stop-monitoring/")
+                def endpoint_stop_monitoring():
+                    from flask import g
+                    # send end-monitoring message
+                    g.vypr.end_monitoring()
+                    # wait for the thread to end
+                    g.vypr.consumption_thread.join()
+                    return "VyPR monitoring thread exited.  The server must be restarted to turn monitoring back on.\n"
+
+                @flask_object.route("/vypr/pause-monitoring/")
+                def endpoint_pause_monitoring():
+                    from flask import g
+                    g.vypr.pause_monitoring()
+                    return "VyPR monitoring paused - thread is still running.\n"
+
+                @flask_object.route("/vypr/resume-monitoring/")
+                def endpoint_resume_monitoring():
+                    from flask import g
+                    g.vypr.resume_monitoring()
+                    return "VyPR monitoring resumed.\n"
+
+                # set up tear down function
+
+                def stop_vypr(e):
+                    # send kill message to consumption thread
+                    # for now, we don't wait for the thread to end
+                    from flask import g
+                    g.vypr.end_monitoring()
+
+                flask_object.teardown_request(stop_vypr)
 
         vypr_output("VyPR monitoring initialisation finished.")
 

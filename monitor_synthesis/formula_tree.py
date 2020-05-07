@@ -268,8 +268,6 @@ class StateValueLengthLessThanStateValueLengthMixed(Atom):
                 self._rhs._arithmetic_stack,
                 cummulative_state[1][0][self._rhs_name]
             )
-            print(lhs_with_arithmetic, rhs_with_arithmetic)
-            print(lhs_with_arithmetic < rhs_with_arithmetic)
             return lhs_with_arithmetic < rhs_with_arithmetic
 
 
@@ -864,7 +862,6 @@ class Checker(object):
         an indication of whether the observation is for the lhs or rhs
         """
         check_value = atom.check(value)
-        print("resulting truth value", check_value)
         if check_value == True:
             result = self.check(self._formula, atom)
         elif check_value == False:
@@ -1111,10 +1108,8 @@ class Checker(object):
                     self._formula.verdict = True
                 return True
         elif formula_is_derived_from_atom(formula):
-            print("simple formula")
             if formula == symbol:
                 if level == 0:
-                    print("reached true verdict")
                     self._formula.verdict = True
                 return True
             else:

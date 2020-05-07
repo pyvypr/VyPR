@@ -129,7 +129,6 @@ def compile_queries(specification_file):
                     for function_selector in verification_conf:
                         if type(function_selector) is Functions:
                             if function_selector.is_satisfied_by(function_ast, scfg):
-                                print("adding '%s.%s'..." % (module_name, function_name))
                                 # add to the compiled hierarchy
                                 if not(compiled_hierarchy.get(module_name)):
                                     compiled_hierarchy[module_name] = {}
@@ -291,7 +290,6 @@ def compute_binding_space(quantifier_sequence, scfg, reachability_map, current_b
                                 vertex._structure_obj.target.id == variable_changed):
                             # the variable we're looking for was found as a simple loop variable
                             qd.append(vertex)
-                            print("adding loop vertex to static binding")
                         elif (type(vertex._structure_obj.target) is ast.Tuple and
                               variable_changed in list(map(lambda item: item.id, vertex._structure_obj.target))):
                             # the loop variable we're looking for was found inside a tuple
@@ -519,16 +517,19 @@ def instrument_point_state(state, name, point, binding_space_indices,
     if measure_attribute == "length":
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = len(%s); " % (state_variable_alias, name)
-        time_attained_instrument = "time_attained_%s = vypr.get_time('point instrument');" % state_variable_alias
+        time_attained_instrument = "time_attained_%s = %s.get_time('point instrument');" %\
+                                   (state_variable_alias, VYPR_OBJECT)
         time_attained_variable = "time_attained_%s" % state_variable_alias
     elif measure_attribute == "type":
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = type(%s).__name__; " % (state_variable_alias, name)
-        time_attained_instrument = "time_attained_%s = vypr.get_time('point instrument');" % state_variable_alias
+        time_attained_instrument = "time_attained_%s = %s.get_time('point instrument');" %\
+                                   (state_variable_alias, VYPR_OBJECT)
         time_attained_variable = "time_attained_%s" % state_variable_alias
     elif measure_attribute == "time_attained":
         state_variable_alias = "time_attained_%i" % atom_sub_index
-        state_recording_instrument = "record_state_%s = vypr.get_time('point instrument'); " % state_variable_alias
+        state_recording_instrument = "record_state_%s = %s.get_time('point instrument'); " %\
+                                     (state_variable_alias, VYPR_OBJECT)
         time_attained_instrument = state_recording_instrument
         time_attained_variable = "record_state_%s" % state_variable_alias
         # the only purpose here is to match what is expected in the monitoring algorithm
@@ -536,7 +537,8 @@ def instrument_point_state(state, name, point, binding_space_indices,
     else:
         state_variable_alias = name.replace(".", "_").replace("(", "__").replace(")", "__")
         state_recording_instrument = "record_state_%s = %s; " % (state_variable_alias, name)
-        time_attained_instrument = "time_attained_%s = vypr.get_time('point instrument');" % state_variable_alias
+        time_attained_instrument = "time_attained_%s = %s.get_time('point instrument');" %\
+                                   (state_variable_alias, VYPR_OBJECT)
         time_attained_variable = "time_attained_%s" % state_variable_alias
 
     # note that observed_value is used three times:
@@ -654,8 +656,8 @@ def instrument_point_transition(atom, point, binding_space_indices, atom_index,
     else:
         state_dict = "{}"
 
-    timer_start_statement = "__timer_s = vypr.get_time('transition instrument')"
-    timer_end_statement = "__timer_e = vypr.get_time('transition instrument')"
+    timer_start_statement = "__timer_s = %s.get_time('transition instrument')" % VYPR_OBJECT
+    timer_end_statement = "__timer_e = %s.get_time('transition instrument')" % VYPR_OBJECT
 
     time_difference_statement = "__duration = __timer_e - __timer_s; "
     instrument_tuple = ("'{formula_hash}', 'instrument', '{function_qualifier}', {binding_space_index}," +
@@ -881,7 +883,7 @@ def place_function_begin_instruments(function_def, formula_hash, instrument_func
     # NOTE: only problem with this is that the "end" instrument is inserted before the return,
     # so a function call in the return statement maybe missed if it's part of verification...
     thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
-    vypr_start_time_instrument = "vypr_start_time = vypr.get_time('begin instrument');"
+    vypr_start_time_instrument = "vypr_start_time = %s.get_time('begin instrument');" % VYPR_OBJECT
     start_instrument = \
         "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
         % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
@@ -907,8 +909,8 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
     for end_vertex in scfg.return_statements:
         end_instrument = \
             "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
-            "vypr.get_time('end instrument')))" \
-            % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
+            "%s.get_time('end instrument')))" \
+            % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash, VYPR_OBJECT)
         end_ast = ast.parse(end_instrument).body[0]
 
         end_ast.lineno = end_vertex._previous_edge._instruction._parent_body[-1].lineno
@@ -924,9 +926,9 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
     # if the last instruction in the ast is not a return statement, add an end instrument at the end
     if not (type(function_def.body[-1]) is ast.Return):
         end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
-                         "vypr.get_time('end instrument')))" \
+                         "%s.get_time('end instrument')))" \
                          % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
-                            formula_hash)
+                            formula_hash, VYPR_OBJECT)
         end_ast = ast.parse(end_instrument).body[0]
 
         logger.log("Placing end instrument at the end of the function body.")
@@ -963,8 +965,15 @@ if __name__ == "__main__":
         if inst_configuration.get("bytecode_extension") else ".pyc"
     VYPR_MODULE = inst_configuration.get("vypr_module") \
         if inst_configuration.get("vypr_module") else ""
-    VERIFICATION_INSTRUCTION = "vypr.send_event"
-    # VERIFICATION_INSTRUCTION = "print"
+
+    # if VYPR_MODULE is empty, we assume that the central object
+    # will be accessible in the request context
+    if VYPR_MODULE == "":
+        VYPR_OBJECT = "g.vypr"
+    else:
+        VYPR_OBJECT = "vypr"
+
+    VERIFICATION_INSTRUCTION = "%s.send_event" % VYPR_OBJECT
 
     machine_id = ("%s-" % inst_configuration.get("machine_id")) if inst_configuration.get("machine_id") else ""
 
@@ -994,17 +1003,8 @@ if __name__ == "__main__":
     # load in verification config file
     # to do this, we read in the existing one, write a temporary one with imports added and import that one
     # this is to allow users to write specifications without caring about importing anything from QueryBuilding
-    """specification_code = open("VyPR_queries.py", "r").read()
-    # replace empty lists with a fake property
-    fake_property = "[Forall(q = changes('fake_vypr_var')).Check(lambda q : q('fake_vypr_var').equals(True))]"
-    specification_code = specification_code.replace("[]", fake_property)
-    with_imports = "from VyPR.QueryBuilding import *\n%s" % specification_code
-    with open("VyPR_queries_with_imports.py", "w") as h:
-        h.write(with_imports)
-    from VyPR_queries_with_imports import verification_conf"""
 
     # run specification compilation process
-    print("This can take some time if your queries require static analysis over a lot of code.")
     verification_conf = compile_queries("VyPR_queries.py")
 
     verified_modules = verification_conf.keys()
@@ -1024,12 +1024,17 @@ if __name__ == "__main__":
         code = "".join(open(file_name, "r").readlines())
         asts = ast.parse(code)
 
-        # add import for init_vypr module
-        import_code = "from %s import vypr" % VYPR_MODULE
+        # if VYPR_MODULE is empty, we assume that VyPR is being started and stopped
+        # per request, so the central object will be stored in a request context
+        if VYPR_MODULE != "":
+            import_code = "from %s import vypr" % VYPR_MODULE
+        else:
+            import_code = "from flask import g"
         import_ast = ast.parse(import_code).body[0]
         import_ast.lineno = asts.body[0].lineno
         import_ast.col_offset = asts.body[0].col_offset
         asts.body.insert(0, import_ast)
+
 
         # add vypr datetime import
         vypr_datetime_import = "from datetime import datetime as vypr_dt"
@@ -1144,7 +1149,6 @@ if __name__ == "__main__":
 
                 reachability_map = construct_reachability_map(scfg)
                 bindings = compute_binding_space(formula_structure, scfg, reachability_map)
-                print(bindings)
 
                 logger.log("Set of static bindings computed is")
                 logger.log(str(bindings))
@@ -1601,3 +1605,5 @@ if __name__ == "__main__":
 
     # close instrumentation log
     logger.end_logging()
+
+    print("Instrumentation complete.  See log file '%s' for results." % logger.log_file_name)
