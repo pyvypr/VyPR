@@ -27,7 +27,7 @@ This will start VyPR's server on port 8080, unless you specify a different port 
 
 We'll start with the query file.  The first time, pull our sample query file at `http://cern.ch/vypr/VyPR_queries.py`.
 This assumes that you have a function `paths_branching_test` in the module `routes`, in the package `app`.
-You probably don't have this, so follow the instructions at http://cern.ch/vypr/writing_queries.py
+You probably don't have this, so follow the instructions at http://cern.ch/vypr/writing_queries.html
 to write your own queries.
 
 We'll now create the VyPR configuration file.  Again, a sample file can be pulled from
