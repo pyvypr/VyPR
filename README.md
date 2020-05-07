@@ -15,8 +15,8 @@ install dependencies and create the server's database.
 
 #### Start the verdict server
 
-To run the server, open a new terminal (tmux is useful here), navigate to `VyPRServer/`
-and run
+To run the server, open a new terminal (tmux is useful here), launch the virtual environment with
+`source venv/bin/activate`, navigate to `VyPRServer/` and run
 ```
 python run_service.py
 ```
