@@ -31,4 +31,4 @@ sqlite3 verdicts.db < verdict-schema.sql
 # pull VyPR for the verdict server to use
 git clone https://github.com/pyvypr/VyPR.git
 
-echo "Setup complete.  See http://cern.ch/vypr/documentation.html for instructions on what to do next."
+echo "Setup complete.  See http://cern.ch/vypr/writing-queries.html for instructions on what to do next."
