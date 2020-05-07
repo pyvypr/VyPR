@@ -169,7 +169,7 @@ class Forall(object):
         if self._formula is None:
             return "Forall(%s)" % self.bind_variables
         else:
-            return "Forall(%s).Formula(%s)" % \
+            return "Forall(%s).Check(%s)" % \
                    (self.bind_variables, self.get_formula_instance())
 
     def Forall(self, **bind_variable):
@@ -330,11 +330,11 @@ class StaticState(object):
 
     def __repr__(self):
         if self._required_binding:
-            return "%s = StaticState(changes=%s, uses=%s)" % \
+            return "%s = changes(%s, uses=%s)" % \
                    (self._bind_variable_name, self._name_changed,
                     self._required_binding)
         else:
-            return "%s = StaticState(changes=%s)" % \
+            return "%s = changes(%s)" % \
                    (self._bind_variable_name, self._name_changed)
 
     def __eq__(self, other):
@@ -394,11 +394,36 @@ class StateValue(object):
         """
         Generates an atom.
         """
-        return formula_tree.StateValueInInterval(
-            self._state,
-            self._name,
-            interval
-        )
+        if type(interval) in [list, tuple]:
+            return formula_tree.StateValueInInterval(
+                self._state,
+                self._name,
+                interval
+            )
+        else:
+            raise Exception("Value '%s' given to _in operator with %s(%s) is not supported." %
+                            (value, self._state, self._name))
+
+    def __lt__(self, value):
+        """
+        Generates an atom.
+        """
+        if type(value) is int:
+            return formula_tree.StateValueInOpenInterval(
+                self._state,
+                self._name,
+                (0, value)
+            )
+        elif type(value) is StateValue:
+            return formula_tree.StateValueEqualToMixed(
+                self._state,
+                self._name,
+                value._state,
+                value._name
+            )
+        else:
+            raise Exception("Value '%s' given to < comparison with %s(%s) is not supported." %
+                            (value, self._state, self._name))
 
     def equals(self, value):
         """
@@ -586,19 +611,19 @@ class StaticTransition(object):
     def __repr__(self):
         if self._required_binding:
             if self._record:
-                return "%s = StaticTransition(operates_on=%s, uses=%s, record=%s)" % \
+                return "%s = calls(%s, uses=%s, record=%s)" % \
                        (self._bind_variable_name, self._operates_on,
                         self._required_binding, str(self._record))
             else:
-                return "%s = StaticTransition(operates_on=%s, uses=%s)" % \
+                return "%s = calls(%s, uses=%s)" % \
                        (self._bind_variable_name, self._operates_on,
                         self._required_binding)
         else:
             if self._record:
-                return "%s = StaticTransition(operates_on=%s, record=%s)" % \
+                return "%s = calls(%s, record=%s)" % \
                        (self._bind_variable_name, self._operates_on, str(self._record))
             else:
-                return "%s = StaticTransition(operates_on=%s)" % \
+                return "%s = calls(%s)" % \
                        (self._bind_variable_name, self._operates_on)
 
     def __eq__(self, other):
@@ -654,7 +679,7 @@ class Duration(object):
                 interval
             )
         else:
-            raise Exception("Duration predicate wasn't defined properly.")
+            raise Exception("Value '%s' given to _in comparison on %s is not supported." % (interval, self._transition))
 
     def __lt__(self, value):
         """
@@ -677,6 +702,11 @@ class Duration(object):
             return formula_tree.TransitionDurationLessThanTransitionDurationMixed(
                 self._transition,
                 value._transition,
+            )
+        elif type(value) is int:
+            return formula_tree.TransitionDurationInOpenInterval(
+                self._transition,
+                (0, value)
             )
 
 
@@ -778,6 +808,8 @@ def derive_composition_sequence(atom):
         elif type(current_operator) == formula_tree.StateValueLengthInInterval:
             current_operator = current_operator._state
         elif type(current_operator) == formula_tree.StateValueInInterval:
+            current_operator = current_operator._state
+        elif type(current_operator) == formula_tree.StateValueInOpenInterval:
             current_operator = current_operator._state
         elif type(current_operator) == formula_tree.StateValueTypeEqualTo:
             current_operator = current_operator._state

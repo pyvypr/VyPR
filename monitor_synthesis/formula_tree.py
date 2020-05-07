@@ -120,7 +120,7 @@ class StateValueInOpenInterval(Atom):
         self.verdict = None
 
     def __repr__(self):
-        return "(%s)(%s) in %s" % (self._state, self._name, self.d_interval)
+        return "(%s)(%s) in %s" % (self._state, self._name, self._interval)
 
     def __eq__(self, other_atom):
         if type(other_atom) is StateValueInInterval:
@@ -320,6 +320,29 @@ class TransitionDurationInInterval(Atom):
 
     def check(self, value):
         return self._interval[0] <= value[0][0].total_seconds() <= self._interval[1]
+
+
+class TransitionDurationInOpenInterval(Atom):
+    """
+    This class models the atom (d(delta t) in I).
+    """
+
+    def __init__(self, transition, interval):
+        self._transition = transition
+        self._interval = interval
+        self.verdict = None
+
+    def __repr__(self):
+        return "d(%s) in %s" % (self._transition, self._interval)
+
+    def __eq__(self, other_atom):
+        if type(other_atom) is TransitionDurationInOpenInterval:
+            return (self._transition == other_atom._transition and self._interval == other_atom._interval)
+        else:
+            return False
+
+    def check(self, value):
+        return self._interval[0] < value[0][0].total_seconds() < self._interval[1]
 
 
 class TransitionDurationLessThanTransitionDurationMixed(Atom):
