@@ -23,6 +23,80 @@ from collections import OrderedDict
 from VyPR.monitor_synthesis import formula_tree
 
 """
+Function selection.
+"""
+
+
+class Module(object):
+    """
+    Used to point to a module/function in specifications.
+    """
+
+    def __init__(self, module_name):
+        self._module_name = module_name
+
+    def Function(self, function_name):
+        self._function_name = function_name
+        return self
+
+
+class Functions(object):
+    """
+    Given as keys in the initial specification config file dictionary by the developer.
+    """
+
+    def __init__(self, **parameter_dictionary):
+        """
+        Parameters given here, with their values, act as criteria to select a set of functions in a project.
+        Multiple parameter values will be used in conjunction.
+        """
+        # set the parameters given as object parameters that can be used in the search performed by instrumentation
+        self.criteria_dict = parameter_dictionary
+
+    def is_satisfied_by(self, function_ast, scfg):
+        """
+        Given a Function AST, decide whether the criteria defined by this instance are satisfied.
+        :param function_ast:
+        :param scfg:
+        :return: True or False
+        """
+        for criterion_name in self.criteria_dict:
+            if criterion_name == "containing_call_of":
+                edges = scfg.edges
+                call_found = False
+                for edge in edges:
+                    if edge._operates_on and self.criteria_dict[criterion_name] in edge._operates_on:
+                        call_found = True
+                # if no call was found, this criterion has not been met,
+                # so return False because the conjunction is broken
+                if not call_found:
+                    return False
+            elif criterion_name == "containing_change_of":
+                vertices = scfg.vertices
+                change_found = False
+                for vertex in vertices:
+                    if self.criteria_dict[criterion_name] in vertex._name_changed:
+                        change_found = True
+                    elif hasattr(vertex, "_structure_obj"):
+                        if type(vertex._structure_obj) is ast.For:
+                            if type(vertex._structure_obj.target) is ast.Tuple:
+                                if (self.criteria_dict[criterion_name] in
+                                        map(lambda item: item.id, vertex._structure_obj.target)):
+                                    change_found = True
+                            else:
+                                if self.criteria_dict[criterion_name] == vertex._structure_obj.target.id:
+                                    change_found = True
+                # if no change was found, this criterion has not been met,
+                # so return False because the conjunction is broken
+                if not (change_found):
+                    return False
+        # we found no evidence against satisfaction, so return True
+        return True
+
+    def __repr__(self):
+        return "<%s>" % str(self.criteria_dict)
+
+"""
 General structure-building classes and methods.
 """
 

@@ -129,10 +129,19 @@ def get_reversed_string_list(obj, omit_subscripts=False):
             elif type(obj.slice.value) is ast.Name:
                 return ["[%s]" % obj.slice.value.id] + get_reversed_string_list(obj.value,
                                                                                 omit_subscripts=omit_subscripts)
+            elif type(obj.slice.value) is ast.Subscript:
+                return ["[...]"] + get_reversed_string_list(obj.value, omit_subscripts=omit_subscripts)
+            elif type(obj.slice.value) is ast.Call:
+                if type(obj.slice.value.func) is ast.Attribute:
+                    return [get_attr_name_string(obj.slice.value.func)]
+                else:
+                    return [obj.slice.value.func.id]
     elif type(obj) is ast.Call:
         return get_function_name_strings(obj)
     elif type(obj) is ast.Str:
         return [obj.s]
+    else:
+        return [str(obj)]
 
 
 def get_attr_name_string(obj, omit_subscripts=False):
@@ -197,7 +206,13 @@ class CFGVertex(object):
                     # nothing else could be changed
                     self._name_changed = []
             elif type(entry) is ast.Raise:
-                self._name_changed = [entry.type.func.id]
+                if type(entry.type) is ast.Call:
+                    if type(entry.type.func) is ast.Attribute:
+                        self._name_changed = [get_attr_name_string(entry.type.func)]
+                    else:
+                        self._name_changed = [entry.type.func.id]
+                else:
+                    self._name_changed = []
             elif type(entry) is ast.Pass:
                 self._name_changed = ["pass"]
             elif type(entry) is ast.Continue:
@@ -246,7 +261,14 @@ class CFGEdge(object):
         elif type(self._instruction) is ast.Return and type(self._instruction.value) is ast.Call:
             self._operates_on = get_function_name_strings(self._instruction.value)
         elif type(self._instruction) is ast.Raise:
-            self._operates_on = [self._instruction.type.func.id]
+            if type(self._instruction.type) is ast.Call:
+                if type(self._instruction.type.func) is ast.Attribute:
+                    self._operates_on = [get_attr_name_string(self._instruction.type.func)]
+                else:
+                    self._operates_on = [self._instruction.type.func.id]
+            else:
+                self._operates_on = []
+
         elif type(self._instruction) is ast.Pass:
             self._operates_on = ["pass"]
         else:
@@ -402,9 +424,9 @@ class CFG(object):
                 for vertex in current_vertices:
                     vertex.add_outgoing_edge(loop_ending_edge)
 
-                # direct all new edges to this new vertex
+                """# direct all new edges to this new vertex
                 for edge in new_edges:
-                    edge.set_target_state(new_vertex)
+                    edge.set_target_state(new_vertex)"""
 
                 # set the current_vertices to empty so no constructs can make an edge
                 # from the preceding statement
@@ -757,7 +779,7 @@ class CFG(object):
                 path_length = 0
 
             elif ast_is_while(entry):
-                # needs work - but while loops haven't been a thing we've needed to handle so far
+                """# needs work - but while loops haven't been a thing we've needed to handle so far
                 # need to add code to deal with branching vertices
                 path_length += 1
 
@@ -773,7 +795,76 @@ class CFG(object):
                         final_vertex.add_outgoing_edge(new_positive_edge)
                         new_positive_edge.set_target_state(base_vertex)
 
-                current_vertices = final_vertices
+                current_vertices = final_vertices"""
+
+                entry._parent_body = block
+                path_length += 1
+
+                empty_pre_loop_vertex = CFGVertex(structure_obj=entry)
+                empty_pre_loop_vertex._name_changed = ['while']
+                empty_post_loop_vertex = CFGVertex()
+                empty_post_loop_vertex._name_changed = ['post-while']
+                self.vertices.append(empty_pre_loop_vertex)
+                self.vertices.append(empty_post_loop_vertex)
+
+                # link current_vertices to the pre-loop vertex
+                for vertex in current_vertices:
+                    new_edge = CFGEdge(entry.test, "while")
+                    self.edges.append(new_edge)
+                    vertex.add_outgoing_edge(new_edge)
+                    new_edge.set_target_state(empty_pre_loop_vertex)
+
+                current_vertices = [empty_pre_loop_vertex]
+
+                # process loop body
+                final_vertices = self.process_block(
+                    entry.body,
+                    current_vertices,
+                    ['enter-while'],
+                    empty_post_loop_vertex
+                )
+
+                # for a for loop, we add a path recording instrument at the beginning of the loop body
+                # and after the loop body
+                self.branch_initial_statements.append(["while", entry.body[0], "enter-while", entry, "end-while"])
+
+                # add 2 edges from the final_vertex - one going back to the pre-loop vertex
+                # with the positive condition, and one going to the post loop vertex.
+
+                for final_vertex in final_vertices:
+                    # there will probably only ever be one final vertex, but we register a branching vertex
+                    # self.branching_vertices.append(final_vertex)
+                    for base_vertex in current_vertices:
+                        new_positive_edge = CFGEdge('while-jump', 'while-jump')
+                        self.edges.append(new_positive_edge)
+                        final_vertex.add_outgoing_edge(new_positive_edge)
+                        new_positive_edge.set_target_state(base_vertex)
+
+                        new_post_edge = CFGEdge("post-while", "post-while")
+                        self.edges.append(new_post_edge)
+                        final_vertex.add_outgoing_edge(new_post_edge)
+                        new_post_edge.set_target_state(empty_post_loop_vertex)
+
+                # process all of the continue vertices on the stack
+                for continue_vertex in self.continue_vertex_stack:
+                    new_edge = CFGEdge("post-while", "post-while")
+                    self.edges.append(new_edge)
+                    continue_vertex.add_outgoing_edge(new_edge)
+                    new_edge.set_target_state(empty_pre_loop_vertex)
+                    self.continue_vertex_stack.remove(continue_vertex)
+
+                skip_edge = CFGEdge(formula_tree.lnot(entry.test), "while-skip")
+                empty_pre_loop_vertex.add_outgoing_edge(skip_edge)
+                # skip_edge.set_target_state(final_vertices[0])
+                skip_edge.set_target_state(empty_post_loop_vertex)
+
+                current_vertices = [empty_post_loop_vertex]
+                # current_vertices = final_vertices
+
+                condition.append("skip-while-loop")
+
+                # reset path length for instructions after loop
+                path_length = 0
 
         return current_vertices
 

@@ -279,6 +279,12 @@ def consumption_thread_function(verification_obj):
             elif scope_event == "start":
                 vypr_output("Function '%s' has started." % function_name)
 
+                # reset anything that might have been left over from the previous call,
+                # especially if an unhandled exception caused the function to end without
+                # vypr instruments sending an end signal
+                maps.static_qd_to_monitors = {}
+                maps.verdict_report.reset()
+
                 # remember when the function call started
                 maps.latest_time_of_call = top_pair[3]
 
