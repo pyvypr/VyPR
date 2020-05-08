@@ -16,7 +16,6 @@ import base64
 import datetime
 import py_compile
 import time
-import pprint
 
 # for now, we remove the final occurrence of VyPR from the first path to look in for modules
 rindex = sys.path[0].rfind("/VyPR")
@@ -93,7 +92,18 @@ def compile_queries(specification_file):
         h.write(with_imports)
 
     # we now import the specification file
-    from VyPR_queries_with_imports import verification_conf
+    try:
+        from VyPR_queries_with_imports import verification_conf
+    except AttributeError:
+        print("Cannot continue with instrumentation - "
+              "looks like you tried to call a non-existent method on an object!\n")
+        print(traceback.format_exc())
+        exit()
+    except:
+        # check for errors in the specification
+        print(traceback.format_exc())
+        exit()
+
 
     # this hierarchy will be populated as functions are found in the project that satisfy requirements
     compiled_hierarchy = {}
