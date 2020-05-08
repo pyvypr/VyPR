@@ -11,8 +11,11 @@ cd VyPR
 # install requirements
 pip install -r requirements.txt
 
-# go back to the root directory
+# go back to the root directory to pull VyPRAnalysis
 cd ../
+
+# pull the analysis library
+git clone https://github.com/pyvypr/VyPRAnalysis.git
 
 echo "Pulling VyPR Server..."
 # pull VyPRServer
