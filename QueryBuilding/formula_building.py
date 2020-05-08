@@ -768,7 +768,6 @@ class Duration(PossiblyNumeric):
             raise Exception("Value of type %s given to < comparison on %s is not supported." %
                             (value.__class__.__name__, self._transition))
 
-
     def __le__(self, value):
         """
         Generates an atom.
@@ -835,7 +834,36 @@ class TimeBetweenStates(object):
                 interval
             )
         else:
-            raise Exception("TimeBetween predicate wasn't defined properly.")
+            raise Exception("Value of type %s given to _in comparison on %s is not supported." %
+                            (interval.__class__.__name__, self))
+
+    def __lt__(self, value):
+        """
+        Generates an atom.
+        """
+        if type(value) in [int, float]:
+            return formula_tree.TimeBetweenInOpenInterval(
+                self._lhs,
+                self._rhs,
+                [0, value]
+            )
+        else:
+            raise Exception("Value of type %s given to < comparison on %s is not supported." %
+                            (value.__class__.__name__, self))
+
+    def __le__(self, value):
+        """
+        Generates an atom.
+        """
+        if type(value) in [int, float]:
+            return formula_tree.TimeBetweenInInterval(
+                self._lhs,
+                self._rhs,
+                [0, value]
+            )
+        else:
+            raise Exception("Value of type %s given to <= comparison on %s is not supported." %
+                            (value.__class__.__name__, self))
 
 
 """
