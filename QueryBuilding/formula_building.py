@@ -899,13 +899,7 @@ def derive_composition_sequence(atom):
     else:
         current_operator = atom
 
-    if type(atom) in [formula_tree.StateValueEqualToMixed,
-                      formula_tree.StateValueLengthLessThanStateValueLengthMixed,
-                      formula_tree.TransitionDurationLessThanTransitionDurationMixed,
-                      formula_tree.TransitionDurationLessThanStateValueMixed,
-                      formula_tree.TransitionDurationLessThanStateValueLengthMixed,
-                      formula_tree.TimeBetweenInInterval,
-                      formula_tree.TimeBetweenInOpenInterval]:
+    if formula_tree.is_mixed_atom(atom):
 
         # atom is mixed - two composition sequences
 

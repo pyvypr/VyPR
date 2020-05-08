@@ -787,6 +787,28 @@ class TimeBetweenInOpenInterval(Atom):
             result = self._interval[0] < duration < self._interval[1]
             return result
 
+def is_mixed_atom(atom):
+    """
+    Given an atom, check if its class is in the list of mixed atom classes.
+    :param atom:
+    :return: True or False.
+    """
+    mixed_atom_class_list = [
+        StateValueEqualToMixed,
+        StateValueLessThanStateValueMixed,
+        StateValueLessThanEqualStateValueMixed,
+        StateValueLengthLessThanStateValueLengthMixed,
+        StateValueLengthLessThanEqualStateValueLengthMixed,
+        TransitionDurationLessThanTransitionDurationMixed,
+        TransitionDurationLessThanEqualTransitionDurationMixed,
+        TransitionDurationLessThanStateValueMixed,
+        TransitionDurationLessThanEqualStateValueMixed,
+        TransitionDurationLessThanStateValueLengthMixed,
+        TransitionDurationLessThanEqualStateValueLengthMixed,
+
+    ]
+    return type(atom) in mixed_atom_class_list
+
 
 """
 Classes for propositional logical connectives.

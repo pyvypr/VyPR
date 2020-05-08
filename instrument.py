@@ -1240,13 +1240,7 @@ if __name__ == "__main__":
 
                         static_qd_to_point_map[m][atom_index] = {}
 
-                        if type(atom) in [formula_tree.StateValueEqualToMixed,
-                                          formula_tree.StateValueLengthLessThanStateValueLengthMixed,
-                                          formula_tree.TransitionDurationLessThanTransitionDurationMixed,
-                                          formula_tree.TransitionDurationLessThanStateValueMixed,
-                                          formula_tree.TransitionDurationLessThanStateValueLengthMixed,
-                                          formula_tree.TimeBetweenInInterval,
-                                          formula_tree.TimeBetweenInOpenInterval]:
+                        if formula_tree.is_mixed_atom(atom):
 
                             # there may be multiple bind variables
                             composition_sequences = derive_composition_sequence(atom)
