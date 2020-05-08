@@ -805,7 +805,8 @@ def is_mixed_atom(atom):
         TransitionDurationLessThanEqualStateValueMixed,
         TransitionDurationLessThanStateValueLengthMixed,
         TransitionDurationLessThanEqualStateValueLengthMixed,
-
+        TimeBetweenInOpenInterval,
+        TimeBetweenInInterval
     ]
     return type(atom) in mixed_atom_class_list
 
