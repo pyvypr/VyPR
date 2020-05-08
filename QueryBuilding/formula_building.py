@@ -920,9 +920,13 @@ def derive_composition_sequence(atom):
 
         if type(current_operator) == formula_tree.TransitionDurationInInterval:
             current_operator = current_operator._transition
+        if type(current_operator) == formula_tree.TransitionDurationInOpenInterval:
+            current_operator = current_operator._transition
         elif type(current_operator) == formula_tree.StateValueEqualTo:
             current_operator = current_operator._state
         elif type(current_operator) == formula_tree.StateValueLengthInInterval:
+            current_operator = current_operator._state
+        elif type(current_operator) == formula_tree.StateValueLengthInOpenInterval:
             current_operator = current_operator._state
         elif type(current_operator) == formula_tree.StateValueInInterval:
             current_operator = current_operator._state
