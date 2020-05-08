@@ -1130,10 +1130,10 @@ class Checker(object):
                     self.construct_atom_formula_occurrence_map(formula.operands[n])
         elif formula_is_atom(formula):
             if not(formula in self.sub_formulas):
-              self.sub_formulas.append(formula)
-              formula_index_in_sub_formulas = len(self.sub_formulas)-1
+                self.sub_formulas.append(formula)
+                formula_index_in_sub_formulas = len(self.sub_formulas)-1
             else:
-              formula_index_in_sub_formulas = self.sub_formulas.index(formula)
+                formula_index_in_sub_formulas = self.sub_formulas.index(formula)
 
             if formula in self.atom_to_occurrence_map.keys():
                 self.atom_to_occurrence_map[formula_index_in_sub_formulas].append(formula)
@@ -1150,6 +1150,7 @@ class Checker(object):
         an indication of whether the observation is for the lhs or rhs
         """
         check_value = atom.check(value)
+        print("atom value", check_value)
         if check_value == True:
             result = self.check(self._formula, atom)
         elif check_value == False:
@@ -1158,6 +1159,8 @@ class Checker(object):
             # mixed atoms can still be unconclusive if only part of them has been given an observation
             # in this case, the atom maintains state so no changes are required to the formula tree
             result = None
+        print("verdict", result)
+        print(self._formula.operands)
         return result
 
     def process_atom_and_value(self, atom, observation_time, observation_end_time, value, atom_index, atom_sub_index,
@@ -1197,93 +1200,6 @@ class Checker(object):
 
         return result
 
-    def check_optimised(self, symbol, force_monitor_update=False):
-        """
-        Given a symbol, find the formula occurrences that contain this symbol.
-        For each of the occurrences, replace the atom with the appropriate value (T or F).
-        Then loop up through the parents while each successive parent can be collapsed to a truth value.
-        """
-
-        if not (force_monitor_update) and not (self._formula.verdict is None):
-            return self._formula.verdict
-
-        if symbol in self.observed_atoms or lnot(symbol) in self.observed_atoms:
-            return
-        else:
-            self.observed_atoms.append(symbol)
-
-        # NOTE: BE AWARE THAT THE ALPHABET USED TO INITIALLY POPULATE _STATE DOES NOT INCLUDE NEGATIVES
-        # OF EVERY ATOM
-
-        # update state for the monitoring algorithm to use
-        self._state.set_state(symbol)
-
-        # temporary fix for Python 3 - the long term solution needs to be more robust
-        index_of_symbol_in_sub_formulas = self.sub_formulas.index(symbol)
-        if index_of_symbol_in_sub_formulas in self.atom_to_occurrence_map.keys():
-            positives = self.atom_to_occurrence_map.get(index_of_symbol_in_sub_formulas)
-        else:
-            positives = []
-
-        negatives = []
-
-        all_occurences = positives + negatives
-
-        for occurrence in all_occurences:
-            # find the position of the atom in the subformula
-            index_in_formula = 0
-            # if the formula to which this atom belongs is an atom,
-            # this can only happen when a formula consists of only an atom
-            if formula_is_atom(occurrence):
-                if formula_is_derived_from_atom(symbol):
-                    if formula_is_derived_from_atom(occurrence):
-                        self._formula.verdict = True
-                        return True
-                    else:
-                        self._formula.verdict = False
-                        return False
-                else:
-                    if formula_is_derived_from_atom(occurrence):
-                        self._formula.verdict = False
-                        return False
-                    else:
-                        self._formula.verdict = True
-                        return True
-            else:
-                for n in range(len(occurrence.operands)):
-                    if occurrence.operands[n] in [symbol, lnot(symbol)]:
-                        index_in_formula = n
-
-                # replace the atom we've observed accordingly
-                if formula_is_derived_from_atom(symbol):
-                    if formula_is_derived_from_atom(occurrence.operands[index_in_formula]):
-                        occurrence.operands[index_in_formula] = 'T'
-                    else:
-                        occurrence.operands[index_in_formula] = 'F'
-                else:
-                    if formula_is_derived_from_atom(occurrence.operands[index_in_formula]):
-                        occurrence.operands[index_in_formula] = 'F'
-                    else:
-                        occurrence.operands[index_in_formula] = 'T'
-
-                # iterate up through the tree, collapsing sub-formulas to truth values as far as we can
-                current_formula = occurrence
-                current_collapsed_value = collapsed_formula(current_formula)
-                # iterate while the current formula is collapsible to a truth value
-                while not (current_collapsed_value is None):
-                    if not (current_formula.parent_formula is None):
-                        current_formula.parent_formula.operands[
-                            current_formula.index_in_parent] = current_collapsed_value
-                        current_formula = current_formula.parent_formula
-                        current_collapsed_value = collapsed_formula(current_formula)
-                    else:
-                        # we have collapsed the root to a truth value
-                        truth_value_to_boolean = {'T': True, 'F': False, '?': None}
-                        self._formula.verdict = truth_value_to_boolean[current_collapsed_value]
-                        return self._formula.verdict
-
-        return None
-
     def check(self, formula, symbol, level=0):
         """
         Given a formula and a symbol that is true,
@@ -1306,86 +1222,96 @@ class Checker(object):
 
         sub_verdict = None
 
-        indent = "    " * level
-
+        # we go through the possible forms of the formula
         if type(formula) is LogicalAnd or type(formula) is LogicalOr:
-            # first check if the disjunction or conjunction can be immediately
-            # collapsed to a truth value
-            if type(formula) is LogicalAnd:
-                if 'F' in formula.operands:
-                    if level == 0:
-                        self._formula.verdict = False
-                    return False
-            elif type(formula) is LogicalOr:
-                if 'T' in formula.operands:
-                    if level == 0:
-                        self._formula.verdict = True
-                    return True
-
-            if len(set(formula.operands)) == 1:
-                if formula.operands[0] == 'T':
-                    if level == 0:
-                        self._formula.verdict = True
-                    return True
-                elif formula.operands[0] == 'F':
-                    if level == 0:
-                        self._formula.verdict = False
-                    return False
 
             # if not, iterate through the operands
             for n in range(len(formula.operands)):
                 if not (formula.operands[n] in ['T', 'F']):
+
+                    # recursive base case - we have an atom
                     if formula_is_atom(formula.operands[n]):
+
+                        # deal with negation
+
                         if ((formula_is_derived_from_atom(formula.operands[n]) and formula_is_derived_from_atom(
                                 symbol) and formula.operands[n] == symbol)
                                 or (type(formula.operands[n]) is LogicalNot and type(symbol) is LogicalNot and
                                     formula.operands[n] == symbol)):
                             formula.operands[n] = 'T'
                             if type(formula) is LogicalOr:
-                                formula = 'T'
+                                # we have at least one true subformula, so we can return true
                                 if level == 0:
                                     self._formula.verdict = True
                                 return True
                             elif type(formula) is LogicalAnd:
                                 formula.true_clauses += 1
                                 if formula.true_clauses == len(formula.operands):
-                                    formula = 'T'
+                                    # all subformulas are true, so we can return true
                                     if level == 0:
                                         self._formula.verdict = True
                                     return True
+
                         elif ((formula_is_derived_from_atom(formula.operands[n]) and type(symbol) is LogicalNot and
                                formula.operands[n] == symbol.operand)
                               or (type(formula.operands[n]) is LogicalNot and formula.operands[n].operand == symbol)):
                             formula.operands[n] = 'F'
                             if type(formula) is LogicalAnd:
-                                formula = 'F'
+                                # at least one subformula is false, so return false
                                 if level == 0:
                                     self._formula.verdict = False
                                 return False
+                            elif type(formula) is LogicalOr:
+                                if len(set(formula.operands)) == 1:
+                                    # for disjunction, we only care about false
+                                    if formula.operands[0] == 'F':
+                                        if level == 0:
+                                            self._formula.verdict = False
+                                        return False
+
                     else:
+
+                        # recursive on the subformula
+
                         sub_verdict = self.check(formula.operands[n], symbol, level + 1)
+
+                        # in the cases here, we don't care about None, since that means no truth value
+                        # has been reached in the subformula
+
                         if sub_verdict:
+
                             formula.operands[n] = 'T'
                             if type(formula) is LogicalOr:
-                                formula = 'T'
+                                # we have at least one true subformula, so we can return true
                                 if level == 0:
                                     self._formula.verdict = True
                                 return True
                             elif type(formula) is LogicalAnd:
+                                # if all subformulas are true, we can return true
                                 formula.true_clauses += 1
                                 if formula.true_clauses == len(formula.operands):
-                                    formula = 'T'
                                     if level == 0:
                                         self._formula.verdict = True
                                     return True
-                        elif sub_verdict == False:  # explicitly not including None
+
+                        elif sub_verdict is False:  # explicitly not including None
+
                             formula.operands[n] = 'F'
-                            if type(formula) is LogicalAnd:
-                                formula = 'F'
+                            if type(formula) is LogicalOr:
+                                # check for all false
+                                if len(set(formula.operands)) == 1:
+                                    if formula.operands[0] == 'F':
+                                        if level == 0:
+                                            self._formula.verdict = False
+                                        return False
+                            elif type(formula) is LogicalAnd:
                                 if level == 0:
                                     self._formula.verdict = False
                                 return False
+
+            # we couldn't make any decisions based on subformulas, so return sub_verdict
             return sub_verdict
+
         elif type(formula) is LogicalNot:
             if formula_is_derived_from_atom(formula.operand) and formula.operand == symbol:
                 if level == 0:
@@ -1395,6 +1321,7 @@ class Checker(object):
                 if level == 0:
                     self._formula.verdict = True
                 return True
+
         elif formula_is_derived_from_atom(formula):
             if formula == symbol:
                 if level == 0:
