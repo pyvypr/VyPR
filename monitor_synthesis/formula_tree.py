@@ -123,8 +123,9 @@ class StateValueInOpenInterval(Atom):
         return "(%s)(%s) in %s" % (self._state, self._name, self._interval)
 
     def __eq__(self, other_atom):
-        if type(other_atom) is StateValueInInterval:
-            return self._state == other_atom._state and self._name == other_atom._name and self._interval == other_atom._interval
+        if type(other_atom) is StateValueInOpenInterval:
+            return (self._state == other_atom._state and self._name == other_atom._name
+                    and self._interval == other_atom._interval)
         else:
             return False
 
@@ -151,7 +152,7 @@ class StateValueEqualTo(Atom):
 
     def __eq__(self, other_atom):
         if type(other_atom) is StateValueEqualTo:
-            return (self._state == other_atom._state and self._name == other_atom._name \
+            return (self._state == other_atom._state and self._name == other_atom._name
                     and self._value == other_atom._value)
         else:
             return False
@@ -176,7 +177,7 @@ class StateValueTypeEqualTo(Atom):
 
     def __eq__(self, other_atom):
         if type(other_atom) is StateValueTypeEqualTo:
-            return (self._state == other_atom._state and self._name == other_atom._name \
+            return (self._state == other_atom._state and self._name == other_atom._name
                     and self._value == other_atom._value)
         else:
             return False
@@ -228,6 +229,92 @@ class StateValueEqualToMixed(Atom):
             return lhs_with_arithmetic == rhs_with_arithmetic
 
 
+class StateValueLessThanStateValueMixed(Atom):
+    """
+    This class models the atom (s1(x) < s2(y)).
+    """
+
+    def __init__(self, lhs, lhs_name, rhs, rhs_name):
+        self._lhs = lhs
+        self._rhs = rhs
+        self._lhs_name = lhs_name
+        self._rhs_name = rhs_name
+        self.verdict = None
+
+    def __repr__(self):
+        return "(%s)(%s) < (%s)(%s)" % (self._lhs, self._lhs_name, self._rhs, self._rhs_name)
+
+    def __eq__(self, other_atom):
+        if type(other_atom) is StateValueLessThanStateValueMixed:
+            return (self._lhs == other_atom._lhs
+                    and self._lhs_name == other_atom._lhs_name
+                    and self._rhs == other_atom._rhs
+                    and self._rhs_name == other_atom._rhs_name)
+        else:
+            return False
+
+    def check(self, cummulative_state):
+        """
+        If either the RHS or LHS are None, we don't try to reach a truth value.
+        But if they are both not equal to None, we check for equality.
+        """
+        if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+            return None
+        else:
+            lhs_with_arithmetic = apply_arithmetic_stack(
+                self._lhs._arithmetic_stack,
+                cummulative_state[0][0][self._lhs_name]
+            )
+            rhs_with_arithmetic = apply_arithmetic_stack(
+                self._rhs._arithmetic_stack,
+                cummulative_state[1][0][self._rhs_name]
+            )
+            return lhs_with_arithmetic < rhs_with_arithmetic
+
+
+class StateValueLessThanEqualStateValueMixed(Atom):
+    """
+    This class models the atom (s1(x) <= s2(y)).
+    """
+
+    def __init__(self, lhs, lhs_name, rhs, rhs_name):
+        self._lhs = lhs
+        self._rhs = rhs
+        self._lhs_name = lhs_name
+        self._rhs_name = rhs_name
+        self.verdict = None
+
+    def __repr__(self):
+        return "(%s)(%s) <= (%s)(%s)" % (self._lhs, self._lhs_name, self._rhs, self._rhs_name)
+
+    def __eq__(self, other_atom):
+        if type(other_atom) is StateValueLessThanEqualStateValueMixed:
+            return (self._lhs == other_atom._lhs
+                    and self._lhs_name == other_atom._lhs_name
+                    and self._rhs == other_atom._rhs
+                    and self._rhs_name == other_atom._rhs_name)
+        else:
+            return False
+
+    def check(self, cummulative_state):
+        """
+        If either the RHS or LHS are None, we don't try to reach a truth value.
+        But if they are both not equal to None, we check for equality.
+        """
+        if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+            return None
+        else:
+            lhs_with_arithmetic = apply_arithmetic_stack(
+                self._lhs._arithmetic_stack,
+                cummulative_state[0][0][self._lhs_name]
+            )
+            rhs_with_arithmetic = apply_arithmetic_stack(
+                self._rhs._arithmetic_stack,
+                cummulative_state[1][0][self._rhs_name]
+            )
+            return lhs_with_arithmetic <= rhs_with_arithmetic
+
+
 class StateValueLengthLessThanStateValueLengthMixed(Atom):
     """
     This class models the atom (s1(x).length() < s2(y).length()).
@@ -271,9 +358,52 @@ class StateValueLengthLessThanStateValueLengthMixed(Atom):
             return lhs_with_arithmetic < rhs_with_arithmetic
 
 
+class StateValueLengthLessThanEqualStateValueLengthMixed(Atom):
+    """
+    This class models the atom (s1(x).length() < s2(y).length()).
+    """
+
+    def __init__(self, lhs, lhs_name, rhs, rhs_name):
+        self._lhs = lhs
+        self._rhs = rhs
+        self._lhs_name = lhs_name
+        self._rhs_name = rhs_name
+        self.verdict = None
+
+    def __repr__(self):
+        return "(%s)(%s).length() <= (%s)(%s).length()" % (self._lhs, self._lhs_name, self._rhs, self._rhs_name)
+
+    def __eq__(self, other_atom):
+        if type(other_atom) is StateValueLengthLessThanEqualStateValueLengthMixed:
+            return (self._lhs == other_atom._lhs
+                    and self._lhs_name == other_atom._lhs_name
+                    and self._rhs == other_atom._rhs
+                    and self._rhs_name == other_atom._rhs_name)
+        else:
+            return False
+
+    def check(self, cummulative_state):
+        """
+        If either the RHS or LHS are None, we don't try to reach a truth value.
+        But if they are both not equal to None, we check for equality.
+        """
+        if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+            return None
+        else:
+            lhs_with_arithmetic = apply_arithmetic_stack(
+                self._lhs._arithmetic_stack,
+                cummulative_state[0][0][self._lhs_name]
+            )
+            rhs_with_arithmetic = apply_arithmetic_stack(
+                self._rhs._arithmetic_stack,
+                cummulative_state[1][0][self._rhs_name]
+            )
+            return lhs_with_arithmetic <= rhs_with_arithmetic
+
+
 class StateValueLengthInInterval(Atom):
     """
-    This class models the atom (len(s(x)) in I).
+    This class models the atom (len(s(x)) in I) for closed I.
     """
 
     def __init__(self, state, name, interval):
@@ -287,7 +417,7 @@ class StateValueLengthInInterval(Atom):
 
     def __eq__(self, other_atom):
         if type(other_atom) is StateValueLengthInInterval:
-            return (self._state == other_atom._state and self._name == other_atom._name \
+            return (self._state == other_atom._state and self._name == other_atom._name
                     and self._interval == other_atom._interval)
         else:
             return False
@@ -297,6 +427,34 @@ class StateValueLengthInInterval(Atom):
         Mandatory check method used by formula trees to compute truth values.
         """
         return self._interval[0] <= value[0][0][self._name] <= self._interval[1]
+
+
+class StateValueLengthInOpenInterval(Atom):
+    """
+    This class models the atom (len(s(x)) in I) for open I.
+    """
+
+    def __init__(self, state, name, interval):
+        self._state = state
+        self._name = name
+        self._interval = interval
+        self.verdict = None
+
+    def __repr__(self):
+        return "(%s(%s)).length() in %s" % (self._state, self._name, self._interval)
+
+    def __eq__(self, other_atom):
+        if type(other_atom) is StateValueLengthInOpenInterval:
+            return (self._state == other_atom._state and self._name == other_atom._name
+                    and self._interval == other_atom._interval)
+        else:
+            return False
+
+    def check(self, value):
+        """
+        Mandatory check method used by formula trees to compute truth values.
+        """
+        return self._interval[0] < value[0][0][self._name] < self._interval[1]
 
 
 class TransitionDurationInInterval(Atom):
@@ -314,7 +472,7 @@ class TransitionDurationInInterval(Atom):
 
     def __eq__(self, other_atom):
         if type(other_atom) is TransitionDurationInInterval:
-            return (self._transition == other_atom._transition and self._interval == other_atom._interval)
+            return self._transition == other_atom._transition and self._interval == other_atom._interval
         else:
             return False
 
@@ -337,7 +495,7 @@ class TransitionDurationInOpenInterval(Atom):
 
     def __eq__(self, other_atom):
         if type(other_atom) is TransitionDurationInOpenInterval:
-            return (self._transition == other_atom._transition and self._interval == other_atom._interval)
+            return self._transition == other_atom._transition and self._interval == other_atom._interval
         else:
             return False
 
@@ -361,6 +519,37 @@ class TransitionDurationLessThanTransitionDurationMixed(Atom):
 
     def __eq__(self, other_atom):
         if type(other_atom) is TransitionDurationLessThanTransitionDurationMixed:
+            return self._lhs == other_atom._lhs and self._rhs == other_atom._rhs
+        else:
+            return False
+
+    def check(self, cummulative_state):
+        """
+        If either the RHS or LHS are None, we don't try to reach a truth value.
+        But if they are both not equal to None, we check for equality.
+        """
+        if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+            return None
+        else:
+            return cummulative_state[0][0] < cummulative_state[1][0]
+
+
+class TransitionDurationLessThanEqualTransitionDurationMixed(Atom):
+    """
+    This class models the atom (duration(t1) < duration(t2))
+    for v the duration of another transition.
+    """
+
+    def __init__(self, lhs_transition, rhs_transition):
+        self._lhs = lhs_transition
+        self._rhs = rhs_transition
+        self.verdict = None
+
+    def __repr__(self):
+        return "d(%s) <= d(%s)" % (self._lhs, self._rhs)
+
+    def __eq__(self, other_atom):
+        if type(other_atom) is TransitionDurationLessThanEqualTransitionDurationMixed:
             return (self._lhs == other_atom._lhs and
                     self._rhs == other_atom._rhs)
         else:
@@ -374,7 +563,7 @@ class TransitionDurationLessThanTransitionDurationMixed(Atom):
         if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
             return None
         else:
-            return cummulative_state[0][0] < cummulative_state[1][0]
+            return cummulative_state[0][0] <= cummulative_state[1][0]
 
 
 class TransitionDurationLessThanStateValueMixed(Atom):
@@ -415,6 +604,44 @@ class TransitionDurationLessThanStateValueMixed(Atom):
             return cummulative_state[0][0].total_seconds() < rhs_with_arithmetic
 
 
+class TransitionDurationLessThanEqualStateValueMixed(Atom):
+    """
+    This class models the atom (duration(t) <= v)
+    for v a value given by a state.
+    """
+
+    def __init__(self, transition, state, name):
+        self._lhs = transition
+        self._rhs = state
+        self._rhs_name = name
+        self.verdict = None
+
+    def __repr__(self):
+        return "d(%s) <= (%s)(%s)" % (self._lhs, self._rhs, self._rhs_name)
+
+    def __eq__(self, other_atom):
+        if type(other_atom) is TransitionDurationLessThanEqualStateValueMixed:
+            return (self._lhs == other_atom._lhs and
+                    self._rhs == other_atom._rhs and
+                    self._rhs_name == other_atom._rhs_name)
+        else:
+            return False
+
+    def check(self, cummulative_state):
+        """
+        If either the RHS or LHS are None, we don't try to reach a truth value.
+        But if they are both not equal to None, we check for equality.
+        """
+        if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+            return None
+        else:
+            rhs_with_arithmetic = apply_arithmetic_stack(
+                self._rhs._arithmetic_stack,
+                cummulative_state[1][0][self._rhs_name]
+            )
+            return cummulative_state[0][0].total_seconds() <= rhs_with_arithmetic
+
+
 class TransitionDurationLessThanStateValueLengthMixed(Atom):
     """
     This class models the atom (duration(t) < v.length())
@@ -451,6 +678,44 @@ class TransitionDurationLessThanStateValueLengthMixed(Atom):
                 cummulative_state[1][0][self._rhs_name]
             )
             return cummulative_state[0][0].total_seconds() < rhs_with_arithmetic
+
+
+class TransitionDurationLessThanEqualStateValueLengthMixed(Atom):
+    """
+    This class models the atom (duration(t) < v.length())
+    for v a value given by a state.
+    """
+
+    def __init__(self, transition, state, name):
+        self._lhs = transition
+        self._rhs = state
+        self._rhs_name = name
+        self.verdict = None
+
+    def __repr__(self):
+        return "d(%s) <= (%s)(%s).length()" % (self._lhs, self._rhs, self._rhs_name)
+
+    def __eq__(self, other_atom):
+        if type(other_atom) is TransitionDurationLessThanEqualStateValueLengthMixed:
+            return (self._lhs == other_atom._lhs and
+                    self._rhs == other_atom._rhs and
+                    self._rhs_name == other_atom._rhs_name)
+        else:
+            return False
+
+    def check(self, cummulative_state):
+        """
+        If either the RHS or LHS are None, we don't try to reach a truth value.
+        But if they are both not equal to None, we check for equality.
+        """
+        if cummulative_state.get(0) is None or cummulative_state.get(1) is None:
+            return None
+        else:
+            rhs_with_arithmetic = apply_arithmetic_stack(
+                self._rhs._arithmetic_stack,
+                cummulative_state[1][0][self._rhs_name]
+            )
+            return cummulative_state[0][0].total_seconds() <= rhs_with_arithmetic
 
 
 class TimeBetweenInInterval(Atom):
