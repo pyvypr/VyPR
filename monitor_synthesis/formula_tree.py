@@ -1091,7 +1091,7 @@ class Checker(object):
         self.atom_to_observation = {}
         self.atom_to_program_path = {}
         self.atom_to_state_dict = {}
-        self.collapsing_atom = None
+        self.collapsing_atom_index = None
         self.collapsing_atom_sub_index = None
         self.sub_formulas = []
         # we use a tuple to record the instantiation time for each encountered bind variable
@@ -1167,23 +1167,33 @@ class Checker(object):
         return "Monitor for formula %s:\n  timestamps: %s\n state: %s\n  verdict: %s" % (
             self._original_formula, str(self._monitor_instantiation_time), str(self._formula), self._formula.verdict)
 
-    def check_atom_truth_value(self, atom, value):
+    def check_atom_truth_value(self, atom, atom_index, atom_sub_index):
         """
-        Given an atom, an observation and, if the atom is mixed,
+        Given an atom (with index and sub-index), an observation and, if the atom is mixed,
         an indication of whether the observation is for the lhs or rhs
         """
-        check_value = atom.check(value)
-        print("atom value", check_value)
+        # take the initial verdict so we can check the difference after update
+        initial_verdict = self._formula.verdict
+        # check the value of the atom given the value observed
+        check_value = atom.check(self.atom_to_observation[atom_index])
+        # update the monitor accordingly based on the truth value given by the check
+        print("checking atom %s" % atom)
         if check_value == True:
             result = self.check(self._formula, atom)
         elif check_value == False:
             result = self.check(self._formula, lnot(atom))
         elif check_value == None:
-            # mixed atoms can still be unconclusive if only part of them has been given an observation
+            # mixed atoms can still be inconclusive if only part of them has been given an observation
             # in this case, the atom maintains state so no changes are required to the formula tree
             result = None
-        print("verdict", result)
-        print(self._formula.operands)
+        # record the new truth value for comparison
+        final_verdict = self._formula.verdict
+        # if the verdict has changed, then the atom/sub-atom indices we just used for the update
+        # are the collapsing ones
+        if initial_verdict != final_verdict:
+            # for each monitor, this branch can only ever be traversed once
+            self.collapsing_atom_index = atom_index
+            self.collapsing_atom_sub_index = atom_sub_index
         return result
 
     def process_atom_and_value(self, atom, observation_time, observation_end_time, value, atom_index, atom_sub_index,
@@ -1202,24 +1212,16 @@ class Checker(object):
         if not (self.atom_to_observation[atom_index].get(atom_sub_index)):
             self.atom_to_observation[atom_index][atom_sub_index] =\
                 (value, inst_point_id, observation_time, observation_end_time)
-            # self.atom_to_program_path[atom_index][atom_sub_index] = [v for v in program_path]
-            # we deal with integer indices now, so no need to copy a list
             self.atom_to_program_path[atom_index][atom_sub_index] = program_path
             self.atom_to_state_dict[atom_index][atom_sub_index] = state_dict
         else:
             # the observation has already been processed - no need to do anything
             return
 
-        initial_verdict = self._formula.verdict
+        # check the truth value of the relevant atom based on the state that we've built up so far
+        result = self.check_atom_truth_value(atom, atom_index, atom_sub_index)
 
-        result = self.check_atom_truth_value(atom, self.atom_to_observation[atom_index])
-
-        final_verdict = self._formula.verdict
-
-        if initial_verdict != final_verdict:
-            # for each monitor, this branch can only ever be traversed once
-            self.collapsing_atom = atom
-            self.collapsing_atom_sub_index = atom_sub_index
+        print("returning result %s" % result)
 
         return result
 

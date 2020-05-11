@@ -7,7 +7,6 @@ import os
 import pickle
 import threading
 import flask
-import traceback
 
 from Queue import Queue
 import requests
@@ -218,13 +217,13 @@ def consumption_thread_function(verification_obj):
                 for static_qd_index in static_qd_to_monitors:
                     for monitor in static_qd_to_monitors[static_qd_index]:
                         # check if the monitor has a collapsing atom - only then do we register a verdict
-                        if monitor.collapsing_atom:
+                        if monitor.collapsing_atom_index is not None:
                             verdict_report.add_verdict(
                                 static_qd_index,
                                 monitor._formula.verdict,
                                 monitor.atom_to_observation,
                                 monitor.atom_to_program_path,
-                                atoms.index(monitor.collapsing_atom),
+                                monitor.collapsing_atom_index,
                                 monitor.collapsing_atom_sub_index,
                                 monitor.atom_to_state_dict
                             )
@@ -345,29 +344,74 @@ def consumption_thread_function(verification_obj):
 
                             # iterate through the observations stored by the previous monitor
                             # for bind variables before the current one and use them to update the new monitor
-                            for atom in monitor._state._state:
+                            for atom_index in monitor._state._state:
+
+                                atom = atoms[atom_index]
+
                                 if not (type(atom) is formula_tree.LogicalNot):
-                                    if (formula_structure._bind_variables.index(
-                                            get_base_variable(atom)) < bind_variable_index
-                                            and not (monitor._state._state[atom] is None)):
-                                        if monitor._state._state[atom] == True:
-                                            new_monitor.check_optimised(atom)
-                                        elif monitor._state._state[atom] == False:
-                                            new_monitor.check_optimised(formula_tree.lnot(atom))
 
-                                        atom_index = atoms.index(atom)
+                                    # the copy we do for the information related to the atom
+                                    # depends on whether the atom is mixed or not
 
-                                        for sub_index in monitor.atom_to_observation[atom_index].keys():
+                                    if formula_tree.is_mixed_atom(atom):
+
+                                        # for mixed atoms, the return value here is a list
+                                        base_variables = get_base_variable(atom)
+                                        # determine the base variables which are before the current bind variable
+                                        relevant_base_variables = filter(
+                                            lambda var : (
+                                                formula_structure._bind_variables.index(var) < bind_variable_index
+                                            ),
+                                            base_variables
+                                        )
+                                        # determine the base variables' sub-indices in the current atom
+                                        relevant_sub_indices = map(
+                                            lambda var : base_variables.index(var),
+                                            relevant_base_variables
+                                        )
+
+                                        # copy over relevant information for the sub indices
+                                        # whose base variables had positions less than the current variable index
+                                        # relevant_sub_indices can contain at most 0 and 1.
+                                        for sub_index in relevant_sub_indices:
+                                            # set up keys in new monitor state if they aren't already there
+                                            if not(new_monitor.atom_to_observation.get(atom_index)):
+                                                new_monitor.atom_to_observation[atom_index] = {}
+                                                new_monitor.atom_to_program_path[atom_index] = {}
+                                                new_monitor.atom_to_state_dict[atom_index] = {}
+
+                                            # copy over observation, program path and state information
                                             new_monitor.atom_to_observation[atom_index][sub_index] = \
                                                 monitor.atom_to_observation[atom_index][sub_index]
-
-                                        for sub_index in monitor.atom_to_program_path[atom_index].keys():
                                             new_monitor.atom_to_program_path[atom_index][sub_index] = \
                                                 monitor.atom_to_program_path[atom_index][sub_index]
-
-                                        for sub_index in monitor.atom_to_state_dict[atom_index].keys():
                                             new_monitor.atom_to_state_dict[atom_index][sub_index] = \
                                                 monitor.atom_to_state_dict[atom_index][sub_index]
+
+                                        # update the state of the monitor
+                                        new_monitor.check_atom_truth_value(atom, atom_index, atom_sub_index)
+                                    else:
+
+                                        # the atom is not mixed, so copying over information is simpler
+
+                                        if (formula_structure._bind_variables.index(
+                                                get_base_variable(atom)) < bind_variable_index
+                                                and not (monitor._state._state[atom] is None)):
+
+                                            # decide how to update the new monitor based on the existing monitor's truth
+                                            # value for it
+                                            if monitor._state._state[atom_index] == True:
+                                                new_monitor.check_optimised(atom)
+                                            elif monitor._state._state[atom_index] == False:
+                                                new_monitor.check_optimised(formula_tree.lnot(atom))
+
+                                            # copy over observation, program path and state information
+                                            new_monitor.atom_to_observation[atom_index][0] = \
+                                                monitor.atom_to_observation[atom_index][0]
+                                            new_monitor.atom_to_program_path[atom_index][0] = \
+                                                monitor.atom_to_program_path[atom_index][0]
+                                            new_monitor.atom_to_state_dict[atom_index][0] = \
+                                                monitor.atom_to_state_dict[atom_index][0]
 
                             vypr_output("    New monitor construction finished.")
 
