@@ -1177,7 +1177,6 @@ class Checker(object):
         # check the value of the atom given the value observed
         check_value = atom.check(self.atom_to_observation[atom_index])
         # update the monitor accordingly based on the truth value given by the check
-        print("checking atom %s" % atom)
         if check_value == True:
             result = self.check(self._formula, atom)
         elif check_value == False:
@@ -1220,8 +1219,6 @@ class Checker(object):
 
         # check the truth value of the relevant atom based on the state that we've built up so far
         result = self.check_atom_truth_value(atom, atom_index, atom_sub_index)
-
-        print("returning result %s" % result)
 
         return result
 
