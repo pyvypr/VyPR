@@ -889,14 +889,16 @@ def place_path_recording_instruments(scfg, instrument_function_qualifier, formul
     logger.log("=" * 100)
 
 
-def place_function_begin_instruments(function_def, formula_hash, instrument_function_qualifier):
+def place_function_begin_instruments(function_def, formula_hashes, instrument_function_qualifier):
     # NOTE: only problem with this is that the "end" instrument is inserted before the return,
     # so a function call in the return statement maybe missed if it's part of verification...
     thread_id_capture = "import threading; __thread_id = threading.current_thread().ident;"
     vypr_start_time_instrument = "vypr_start_time = %s.get_time('begin instrument');" % VYPR_OBJECT
+    formula_hashes = ",".join(map(lambda hash : "'%s'" % hash, formula_hashes))
+    formula_hashes_as_list = "[%s]" % formula_hashes
     start_instrument = \
-        "%s((\"%s\", \"function\", \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
-        % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash)
+        "%s((\"function\", %s, \"%s\", \"start\", vypr_start_time, \"%s\", __thread_id))" \
+        % (VERIFICATION_INSTRUCTION, formula_hashes_as_list, instrument_function_qualifier, formula_hash)
 
     threading_import_ast = ast.parse(thread_id_capture).body[0]
     thread_id_capture_ast = ast.parse(thread_id_capture).body[1]
@@ -914,13 +916,21 @@ def place_function_begin_instruments(function_def, formula_hash, instrument_func
     function_def.body.insert(0, vypr_start_time_ast)
 
 
-def place_function_end_instruments(function_def, scfg, formula_hash, instrument_function_qualifier):
+def place_function_end_instruments(function_def, scfg, formula_hashes, instrument_function_qualifier):
     # insert the end instrument before every return statement
+    formula_hashes = ",".join(map(lambda hash : "'%s'" % hash, formula_hashes))
+    formula_hashes_as_list = "[%s]" % formula_hashes
     for end_vertex in scfg.return_statements:
         end_instrument = \
-            "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
+            "%s((\"function\", %s, \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
             "%s.get_time('end instrument')))" \
-            % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier, formula_hash, VYPR_OBJECT)
+            % (
+                VERIFICATION_INSTRUCTION,
+                formula_hashes_as_list,
+                instrument_function_qualifier,
+                formula_hash,
+                VYPR_OBJECT
+            )
         end_ast = ast.parse(end_instrument).body[0]
 
         end_ast.lineno = end_vertex._previous_edge._instruction._parent_body[-1].lineno
@@ -935,9 +945,9 @@ def place_function_end_instruments(function_def, scfg, formula_hash, instrument_
 
     # if the last instruction in the ast is not a return statement, add an end instrument at the end
     if not (type(function_def.body[-1]) is ast.Return):
-        end_instrument = "%s((\"%s\", \"function\", \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
+        end_instrument = "%s((\"function\", %s, \"%s\", \"end\", flask.g.request_time, \"%s\", __thread_id, " \
                          "%s.get_time('end instrument')))" \
-                         % (VERIFICATION_INSTRUCTION, formula_hash, instrument_function_qualifier,
+                         % (VERIFICATION_INSTRUCTION, formula_hashes_as_list, instrument_function_qualifier,
                             formula_hash, VYPR_OBJECT)
         end_ast = ast.parse(end_instrument).body[0]
 
@@ -1008,6 +1018,15 @@ if __name__ == "__main__":
                     # delete bytecode
                     os.remove(f.replace(".py.inst", BYTECODE_EXTENSION))
                     logger.log("Reset file %s to uninstrumented version." % f)
+
+    for directory in os.walk("."):
+        if directory == "binding_spaces":
+            for file in directory[2]:
+                try:
+                    os.remove(file)
+                except:
+                    print("Could not remove file '%s' from dump directories.  Stopping instrumentation." % file)
+                    exit()
 
     logger.log("Importing and compiling PyCFTL queries...")
     # load in verification config file
@@ -1119,6 +1138,8 @@ if __name__ == "__main__":
 
             # for each property, instrument the function for that property
 
+            property_hashes = []
+
             for (formula_index, formula_structure) in enumerate(verification_conf[module][function]):
 
                 logger.log("Instrumenting for PyCFTL formula %s" % formula_structure)
@@ -1141,6 +1162,8 @@ if __name__ == "__main__":
                 serialised_atom_list = list(
                     map(lambda item: base64.encodestring(pickle.dumps(item)).decode('ascii'), atoms)
                 )
+
+                property_hashes.append(formula_hash)
 
                 # note that this also means giving an empty list [] will result in path instrumentation
                 # without property instrumentation
@@ -1177,7 +1200,8 @@ if __name__ == "__main__":
                     "function": instrument_function_qualifier,
                     "serialised_formula_structure": serialised_formula_structure,
                     "serialised_bind_variables": serialised_bind_variables,
-                    "serialised_atom_list": list(enumerate(serialised_atom_list))
+                    "serialised_atom_list": list(enumerate(serialised_atom_list)),
+                    "formula_index": formula_index
                 }
 
                 # send instrumentation data to the verdict database
@@ -1218,7 +1242,8 @@ if __name__ == "__main__":
                     binding_dictionary = {
                         "binding_space_index": m,
                         "function": function_id,
-                        "binding_statement_lines": line_numbers
+                        "binding_statement_lines": line_numbers,
+                        "property_hash": formula_hash
                     }
                     serialised_binding_dictionary = json.dumps(binding_dictionary)
                     try:
@@ -1568,12 +1593,6 @@ if __name__ == "__main__":
                                                            atom_index, atom_sub_index, instrumentation_point_db_ids,
                                                            measure_attribute="time_attained")
 
-                # finally, insert an instrument at the beginning to tell the monitoring thread that a new call of the
-                # function has started and insert one at the end to signal a return
-                place_function_begin_instruments(function_def, formula_hash, instrument_function_qualifier)
-                # also insert instruments at the end(s) of the function
-                place_function_end_instruments(function_def, scfg, formula_hash, instrument_function_qualifier)
-
                 # write the instrumented scfg to a file
                 instrumented_scfg = CFG()
                 instrumented_scfg.process_block(top_level_block)
@@ -1584,8 +1603,6 @@ if __name__ == "__main__":
                 # check for existence of directories for intermediate data and create them if not found
                 if not (os.path.isdir("binding_spaces")):
                     os.mkdir("binding_spaces")
-                if not (os.path.isdir("index_hash")):
-                    os.mkdir("index_hash")
 
                 # pickle binding space
                 pickled_binding_space = pickle.dumps(bindings)
@@ -1596,12 +1613,12 @@ if __name__ == "__main__":
                 with open(binding_space_dump_file, "wb") as h:
                     h.write(pickled_binding_space)
 
-                # write the index to hash mapping for properties
-                pickled_index_hash = pickle.dumps(index_to_hash)
-                index_to_hash_dump_file = "index_hash/module-%s-function-%s.dump" % \
-                                          (module.replace(".", "-"), function.replace(".", "-"))
-                with open(index_to_hash_dump_file, "wb") as h:
-                    h.write(pickled_index_hash)
+            # finally, insert an instrument at the beginning to tell the monitoring thread that a new call of the
+            # function has started and insert one at the end to signal a return
+            # these instruments send a list of all property hashes to the monitoring thread
+            place_function_begin_instruments(function_def, property_hashes, instrument_function_qualifier)
+            # also insert instruments at the end(s) of the function
+            place_function_end_instruments(function_def, scfg, property_hashes, instrument_function_qualifier)
 
         compile_bytecode_and_write(asts, file_name_without_extension)
 

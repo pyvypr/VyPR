@@ -759,7 +759,7 @@ class Duration(PossiblyNumeric):
                 self._transition,
                 value._transition,
             )
-        elif type(value) is int:
+        elif type(value) in [int, float]:
             return formula_tree.TransitionDurationInOpenInterval(
                 self._transition,
                 [0, value]
@@ -789,7 +789,7 @@ class Duration(PossiblyNumeric):
                 self._transition,
                 value._transition,
             )
-        elif type(value) is int:
+        elif type(value) in [int, float]:
             return formula_tree.TransitionDurationInInterval(
                 self._transition,
                 [0, value]
