@@ -1430,12 +1430,14 @@ if __name__ == "__main__":
                             binding_space_indices = list_of_lists[0]
                             instrumentation_point_db_ids = list_of_lists[1]
 
-                            if type(atom) is formula_tree.TransitionDurationInInterval:
+                            if type(atom) in [formula_tree.TransitionDurationInInterval,
+                                              formula_tree.TransitionDurationInOpenInterval]:
 
                                 instrument_point_transition(atom, point, binding_space_indices, atom_index,
                                                             atom_sub_index, instrumentation_point_db_ids)
 
-                            elif type(atom) in [formula_tree.StateValueInInterval, formula_tree.StateValueEqualTo,
+                            elif type(atom) in [formula_tree.StateValueInInterval,
+                                                formula_tree.StateValueEqualTo,
                                                 formula_tree.StateValueInOpenInterval]:
 
                                 instrument_point_state(atom._state, atom._name, point, binding_space_indices,
@@ -1447,7 +1449,8 @@ if __name__ == "__main__":
                                                        atom_index, atom_sub_index, instrumentation_point_db_ids,
                                                        measure_attribute="type")
 
-                            elif type(atom) in [formula_tree.StateValueLengthInInterval]:
+                            elif type(atom) in [formula_tree.StateValueLengthInInterval,
+                                                formula_tree.StateValueLengthInOpenInterval]:
                                 """
                                 Instrumentation for the length of a value given is different
                                 because we have to add len() to the instrument.
@@ -1457,7 +1460,9 @@ if __name__ == "__main__":
                                                        atom_index, atom_sub_index, instrumentation_point_db_ids,
                                                        measure_attribute="length")
 
-                            elif type(atom) in [formula_tree.StateValueEqualToMixed]:
+                            elif type(atom) in [formula_tree.StateValueEqualToMixed,
+                                                formula_tree.StateValueLessThanStateValueMixed,
+                                                formula_tree.StateValueLessThanEqualStateValueMixed]:
                                 """We're instrumenting multiple states, so we need to perform instrumentation on two 
                                 separate points. """
 
@@ -1478,7 +1483,8 @@ if __name__ == "__main__":
                                     instrument_point_state(atom._rhs, atom._rhs_name, point, binding_space_indices,
                                                            atom_index, atom_sub_index, instrumentation_point_db_ids)
 
-                            elif type(atom) in [formula_tree.StateValueLengthLessThanStateValueLengthMixed]:
+                            elif type(atom) in [formula_tree.StateValueLengthLessThanStateValueLengthMixed,
+                                                formula_tree.StateValueLengthLessThanEqualStateValueLengthMixed]:
                                 """We're instrumenting multiple states, so we need to perform instrumentation on two 
                                 separate points. """
 
@@ -1501,7 +1507,8 @@ if __name__ == "__main__":
                                                            atom_index, atom_sub_index, instrumentation_point_db_ids,
                                                            measure_attribute="length")
 
-                            elif type(atom) is formula_tree.TransitionDurationLessThanTransitionDurationMixed:
+                            elif type(atom) in [formula_tree.TransitionDurationLessThanTransitionDurationMixed,
+                                                formula_tree.TransitionDurationLessThanEqualTransitionDurationMixed]:
                                 """We're instrumenting multiple transitions, so we need to perform instrumentation on 
                                 two separate points. """
 
@@ -1524,7 +1531,8 @@ if __name__ == "__main__":
                                                                 atom_index, atom_sub_index,
                                                                 instrumentation_point_db_ids)
 
-                            elif type(atom) is formula_tree.TransitionDurationLessThanStateValueMixed:
+                            elif type(atom) in [formula_tree.TransitionDurationLessThanStateValueMixed,
+                                                formula_tree.TransitionDurationLessThanEqualStateValueMixed]:
                                 """We're instrumenting multiple transitions, so we need to perform instrumentation on 
                                 two separate points. """
 
@@ -1546,7 +1554,8 @@ if __name__ == "__main__":
                                     instrument_point_state(atom._rhs, atom._rhs_name, point, binding_space_indices,
                                                            atom_index, atom_sub_index, instrumentation_point_db_ids)
 
-                            elif type(atom) is formula_tree.TransitionDurationLessThanStateValueLengthMixed:
+                            elif type(atom) in [formula_tree.TransitionDurationLessThanStateValueLengthMixed,
+                                                formula_tree.TransitionDurationLessThanEqualStateValueLengthMixed]:
                                 """We're instrumenting multiple transitions, so we need to perform instrumentation on 
                                 two separate points. """
 
