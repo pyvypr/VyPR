@@ -509,11 +509,6 @@ class PropertyMapGroup(object):
         self._function_name = function_name
         self._property_hash = property_hash
 
-        # read in binding spaces
-        with open(os.path.join(PROJECT_ROOT, "binding_spaces/module-%s-function-%s-property-%s.dump") % \
-                  (module_name.replace(".", "-"), function_name.replace(":", "-"), property_hash), "rb") as h:
-            binding_space_dump = h.read()
-
         try:
             from VyPR_queries_with_imports import verification_conf
         except ImportError:
@@ -532,7 +527,6 @@ class PropertyMapGroup(object):
 
         # store all the data we have
         self.formula_structure = verification_conf[module_name][function_name.replace(":", ".")][property_index]
-        self.binding_space = pickle.loads(binding_space_dump)
         self.static_qd_to_monitors = {}
         self.static_bindings_to_monitor_states = {}
         self.verdict_report = VerdictReport()
@@ -610,38 +604,34 @@ class Verification(object):
 
         # set up the maps that the monitoring algorithm that the consumption thread runs
 
-        # we need the list of functions that we have instrumentation data from, so read the instrumentation maps
-        # directory
-        dump_files = filter(lambda filename: ".dump" in filename,
-                            os.listdir(os.path.join(PROJECT_ROOT, "binding_spaces")))
-        functions_and_properties = map(lambda function_dump_file: function_dump_file.replace(".dump", ""),
-                                       dump_files)
-        tokens = map(lambda string: string.split("-"), functions_and_properties)
+        # first get the list of monitored functions and prepare it for iteration
+        function_to_properties_map = json.loads(
+            requests.get(
+                os.path.join(VERDICT_SERVER_URL, "get_function_property_pairs/")
+            ).text
+        )
 
         self.function_to_maps = {}
 
-        for token_chain in tokens:
+        for monitored_function in function_to_properties_map:
 
-            start_of_module = token_chain.index("module") + 1
-            start_of_function = token_chain.index("function") + 1
-            start_of_property = token_chain.index("property") + 1
+            tokens = monitored_function.split(".")
+            module = ".".join(tokens[:-1])
+            function = tokens[-1]
 
-            module_string = ".".join(token_chain[start_of_module:start_of_function - 1])
-            # will need to be modified to support functions that are methods
-            # function = ".".join(token_chain[start_of_function:start_of_property-1])
-            function = ":".join(token_chain[start_of_function:start_of_property - 1])
+            for property_hash in function_to_properties_map[monitored_function]:
 
-            property_hash = token_chain[start_of_property]
+                vypr_output("Setting up monitoring state for module/function/property triple %s, %s, %s" % (
+                    module, function, property_hash))
 
-            vypr_output("Setting up monitoring state for module/function/property triple %s, %s, %s" % (
-                module_string, function, property_hash))
+                module_function_string = "%s%s" % (self.machine_id, monitored_function)
 
-            module_function_string = "%s%s.%s" % (self.machine_id, module_string, function)
+                if not (self.function_to_maps.get(module_function_string)):
+                    self.function_to_maps[module_function_string] = {}
+                self.function_to_maps[module_function_string][property_hash] = PropertyMapGroup(module, function,
+                                                                                                property_hash)
 
-            if not (self.function_to_maps.get(module_function_string)):
-                self.function_to_maps[module_function_string] = {}
-            self.function_to_maps[module_function_string][property_hash] = PropertyMapGroup(module_string, function,
-                                                                                            property_hash)
+        print(self.function_to_maps)
 
         vypr_output(self.function_to_maps)
 
