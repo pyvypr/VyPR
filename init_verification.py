@@ -631,8 +631,6 @@ class Verification(object):
                 self.function_to_maps[module_function_string][property_hash] = PropertyMapGroup(module, function,
                                                                                                 property_hash)
 
-        print(self.function_to_maps)
-
         vypr_output(self.function_to_maps)
 
     def initialise(self, flask_object):
