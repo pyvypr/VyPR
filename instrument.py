@@ -1016,8 +1016,11 @@ if __name__ == "__main__":
                     # rename to .py
                     os.rename(f, f.replace(".py.inst", ".py"))
                     # delete bytecode
-                    os.remove(f.replace(".py.inst", BYTECODE_EXTENSION))
-                    logger.log("Reset file %s to uninstrumented version." % f)
+                    try:
+                        os.remove(f.replace(".py.inst", BYTECODE_EXTENSION))
+                        logger.log("Reset file '%s' to uninstrumented version." % f)
+                    except:
+                        logger.log("File '%s' could not be deleted." % f)
 
     for directory in os.walk("."):
         if directory == "binding_spaces":
